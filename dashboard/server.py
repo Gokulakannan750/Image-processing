@@ -160,4 +160,4 @@ def start(host: str = "0.0.0.0", port: int = 5000) -> None:
 
     t = threading.Thread(target=_run, name="dashboard-server", daemon=True)
     t.start()
-    log.info("Web dashboard started → http://localhost:%d", port)
+    log.info("Web dashboard started -> http://localhost:%d", port)

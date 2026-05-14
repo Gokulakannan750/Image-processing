@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from config.config_manager import config_manager
-from detectors.base_detector import BaseDetector, DetectionResult, DetectionTarget
+from .base_detector import BaseDetector, DetectionResult, DetectionTarget
 from utils.logger import get_logger
 
 log = get_logger(__name__)

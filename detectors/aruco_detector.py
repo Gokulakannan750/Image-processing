@@ -10,7 +10,7 @@ import cv2.aruco as aruco
 import numpy as np
 
 from config.config_manager import config_manager
-from detectors.base_detector import BaseDetector, DetectionResult, DetectionTarget
+from .base_detector import BaseDetector, DetectionResult, DetectionTarget
 from utils.logger import get_logger
 from utils.exceptions import CalibrationLoadError
 from utils.math_utils import rotation_vector_to_euler, estimate_blur
