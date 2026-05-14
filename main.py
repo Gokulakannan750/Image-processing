@@ -2,7 +2,7 @@
 main.py
 =======
 High-performance robotics entry point.
-Integrates threaded camera streams, dynamic detector registry, 
+Integrates threaded camera streams, dynamic detector registry,
 decision engine, safety monitoring, and command queue execution.
 """
 import argparse
@@ -32,26 +32,16 @@ from recording.replay_system import ReplayCameraStream
 from simulation.synthetic_environment import SyntheticEnvironment
 from testing.stress_test import StressTestSimulator
 from testing.report_generator import ReportGenerator
+from dashboard.server import dashboard_state
+import dashboard.server as dashboard_server
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Professional Agricultural Robotics Stack")
-    parser.add_argument(
-        "--config", type=str, default=None,
-        help="Path to custom YAML config file"
-    )
-    parser.add_argument(
-        "--replay", type=str, default=None,
-        help="Path to a recorded session directory to replay instead of using live camera"
-    )
-    parser.add_argument(
-        "--simulate", action="store_true",
-        help="Run in synthetic simulation mode without physical hardware"
-    )
-    parser.add_argument(
-        "--stress", action="store_true",
-        help="Run in STRESS TEST mode (frame drops and lag)"
-    )
+    parser.add_argument("--config",   type=str, default=None,  help="Path to custom YAML config file")
+    parser.add_argument("--replay",   type=str, default=None,  help="Path to a recorded session directory")
+    parser.add_argument("--simulate", action="store_true",     help="Run in synthetic simulation mode")
+    parser.add_argument("--stress",   action="store_true",     help="Run in STRESS TEST mode")
     return parser.parse_args()
 
 
@@ -89,9 +79,16 @@ def main() -> None:
         log.info("STARTING LIVE CAMERA STREAM")
         camera = CameraStream()
 
+    # Start web dashboard
+    if config_manager.get("dashboard.enabled", True):
+        dashboard_server.start(
+            host=config_manager.get("dashboard.host", "0.0.0.0"),
+            port=config_manager.get("dashboard.port", 5000),
+        )
+
     log.info("=== System Ready ===")
     log.info("Press 'q' to quit.")
-    
+
     cv2.namedWindow("Robotics Vision Output", cv2.WINDOW_NORMAL)
     cv2.setWindowProperty("Robotics Vision Output", cv2.WND_PROP_TOPMOST, 1)
 
@@ -109,7 +106,6 @@ def main() -> None:
                     safety_monitor.check_health()
                     continue
 
-                # Stress Test Modification
                 if args.stress:
                     frame = stress_simulator.process(frame)
                     if frame is None:
@@ -121,8 +117,6 @@ def main() -> None:
 
                 # Process Vision
                 annotated_frame, result = vision_pipeline.process(frame)
-                
-                # Record Latency in Monitor
                 vision_pipeline.perf_monitor.record_latency(result.frame_latency_ms)
 
                 # Navigation Decisions
@@ -131,15 +125,28 @@ def main() -> None:
                 # Draw Visualizers
                 primary = result.primary_target
                 cmd_visualizer.draw(
-                    annotated_frame, 
-                    current_state, 
+                    annotated_frame,
+                    current_state,
                     steering_correction,
-                    target_center=(primary.center_x, primary.center_y) if primary else (None, None)
+                    target_center=(primary.center_x, primary.center_y) if primary else (None, None),
+                    obstacles=result.obstacles,
                 )
 
                 if controller.is_turning:
                     decision_engine.confirm_turn_complete()
                     controller.is_turning = False
+
+                # Push state to web dashboard
+                dashboard_state.update(
+                    frame=annotated_frame,
+                    vehicle_state=current_state.name,
+                    fps=vision_pipeline.perf_monitor.current_fps,
+                    latency_ms=result.frame_latency_ms,
+                    steering=steering_correction,
+                    obstacles=result.obstacles,
+                    has_target=result.has_targets,
+                    target_distance_m=primary.distance_m if primary else None,
+                )
 
                 cv2.imshow("Robotics Vision Output", annotated_frame)
 
@@ -154,9 +161,9 @@ def main() -> None:
                 if cv2.waitKey(30) & 0xFF == ord("q"):
                     log.info("Quit command received.")
                     break
-                    
-                if current_state == State.STOPPED:
-                    # Reset recovery so we resume scanning automatically
+
+                # Only reset recovery for marker-loss stops, not obstacle stops
+                if current_state == State.STOPPED and not decision_engine._obstacle_blocked:
                     decision_engine.recovery_manager.reset()
 
     except RoboticsBaseError as e:
@@ -170,14 +177,14 @@ def main() -> None:
     finally:
         log.info("Initiating shutdown sequence...")
         cv2.destroyAllWindows()
+        registry.shutdown()
         controller.shutdown()
-        
-        # Generate Test Report if session was recorded
+
         if recorder.enabled:
             log.info("Generating session test report...")
             report_path = ReportGenerator.generate_from_session(recorder.session_dir)
             log.info(f"Test Report saved to: {report_path}")
-            
+
         log.info("=== System Shutdown Complete ===")
 
 

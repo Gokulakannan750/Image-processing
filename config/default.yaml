@@ -1,8 +1,12 @@
 # Professional Robotics Framework Configuration
-# Phase 2: Real-Time Robustness Config
 
 camera:
   index: 0
+  # source overrides index — set to a device index (int) or stream URL (string)
+  # Examples:
+  #   source: 0                               # built-in webcam
+  #   source: "http://192.168.1.5:8080/video" # IP Webcam Android app
+  #   source: "http://192.168.1.5:4747/video" # DroidCam Android/iOS
   width: 1280
   height: 720
   fps: 30
@@ -16,7 +20,7 @@ detectors:
     dictionary: "DICT_6X6_250"
     downsample_width: 1280
     show_rejected: false
-    marker_length_m: 0.02
+    marker_length_m: 0.20
     turn_trigger_distance_m: 1.5
     camera_matrix: [[800, 0, 640], [0, 800, 360], [0, 0, 1]]
     dist_coeffs: [[0, 0, 0, 0]]
@@ -27,18 +31,21 @@ detectors:
     enabled: false
     min_matches: 15
     match_distance_threshold: 50
+  yolo:
+    enabled: true
+    model: "yolov8n.pt"        # downloaded automatically on first run
+    confidence: 0.50           # minimum detection confidence
+    danger_zone_ratio: 0.12    # bbox/frame area fraction that triggers E-STOP
+    device: "cpu"              # "cpu", "cuda", or "mps"
 
 navigation:
   turn_cooldown_s: 10.0
   max_cross_track_error_m: 0.5
   max_heading_error_deg: 15.0
-  # Smoothing parameters
-  smoothing_alpha: 0.3      # EMA alpha for steering and distance
-  dead_zone_x: 20           # Pixel deadzone before steering
-  # Recovery
-  recovery_timeout_s: 2.0   # How long to wait in RECOVERING state before STOPPED
-  # State Machine
-  min_state_duration_s: 0.5 # Prevent state oscillations
+  smoothing_alpha: 0.3
+  dead_zone_x: 20
+  recovery_timeout_s: 2.0
+  min_state_duration_s: 0.5
 
 controller:
   can_interface: "virtual"
@@ -67,14 +74,19 @@ validation:
 
 normalization:
   enabled: true
-  method: "CLAHE"             # CLAHE, SIMPLE, or NONE
+  method: "CLAHE"
   clahe_clip_limit: 2.0
   clahe_grid_size: [8, 8]
-  gamma_correction: 1.2       # > 1.0 brightens shadows
+  gamma_correction: 1.2
 
 testing:
-  active_mode: "NORMAL"       # NORMAL, LOW_LIGHT, BRIGHT_LIGHT, MOTION_BLUR, NOISY
+  active_mode: "NORMAL"
   draw_mode_overlay: true
+
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 5000
 
 debug:
   visualize_commands: true

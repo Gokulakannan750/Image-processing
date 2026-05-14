@@ -7,3 +7,16 @@ logs/
 .vscode/
 scratch/
 *.log
+
+# Claude Code — local AI assistant workspace (never commit)
+.claude/
+
+# YOLO model weights (large binary files — download on first run)
+*.pt
+*.onnx
+
+# Training datasets (use Roboflow/DVC instead)
+training/datasets/
+
+# Recorded sessions (can be large)
+recordings/
