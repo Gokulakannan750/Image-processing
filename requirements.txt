@@ -1,0 +1,6 @@
+opencv-python>=4.10.0
+opencv-contrib-python>=4.10.0
+pyzbar==0.1.9
+numpy>=2.0.0
+python-can==4.3.1
+PyYAML>=6.0.1

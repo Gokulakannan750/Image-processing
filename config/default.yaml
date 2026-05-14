@@ -1,0 +1,85 @@
+# Professional Robotics Framework Configuration
+# Phase 2: Real-Time Robustness Config
+
+camera:
+  index: 0
+  width: 1280
+  height: 720
+  fps: 30
+  timeout_s: 2.0
+  max_reconnect_attempts: 5
+  reconnect_delay_s: 1.0
+
+detectors:
+  aruco:
+    enabled: true
+    dictionary: "DICT_6X6_250"
+    downsample_width: 1280
+    show_rejected: false
+    marker_length_m: 0.02
+    turn_trigger_distance_m: 1.5
+    camera_matrix: [[800, 0, 640], [0, 800, 360], [0, 0, 1]]
+    dist_coeffs: [[0, 0, 0, 0]]
+  barcode:
+    enabled: false
+    min_pixel_area: 20000
+  feature:
+    enabled: false
+    min_matches: 15
+    match_distance_threshold: 50
+
+navigation:
+  turn_cooldown_s: 10.0
+  max_cross_track_error_m: 0.5
+  max_heading_error_deg: 15.0
+  # Smoothing parameters
+  smoothing_alpha: 0.3      # EMA alpha for steering and distance
+  dead_zone_x: 20           # Pixel deadzone before steering
+  # Recovery
+  recovery_timeout_s: 2.0   # How long to wait in RECOVERING state before STOPPED
+  # State Machine
+  min_state_duration_s: 0.5 # Prevent state oscillations
+
+controller:
+  can_interface: "virtual"
+  can_channel: "can0"
+  can_bitrate: 500000
+  turn_command_id: 291
+  turn_command_data: [1, 0, 0, 0, 0, 0, 0, 0]
+
+safety:
+  max_stale_frame_ms: 1500
+  enable_auto_recovery: true
+  min_fps_warning: 5.0
+
+recording:
+  enabled: false
+  output_dir: "recordings"
+  save_raw_frames: true
+  save_annotated_frames: true
+  save_metadata_json: true
+
+validation:
+  pose_stability_threshold: 0.8
+  jitter_warning_m: 0.05
+  min_confidence: 0.6
+  enable_stability_overlay: true
+
+normalization:
+  enabled: true
+  method: "CLAHE"             # CLAHE, SIMPLE, or NONE
+  clahe_clip_limit: 2.0
+  clahe_grid_size: [8, 8]
+  gamma_correction: 1.2       # > 1.0 brightens shadows
+
+testing:
+  active_mode: "NORMAL"       # NORMAL, LOW_LIGHT, BRIGHT_LIGHT, MOTION_BLUR, NOISY
+  draw_mode_overlay: true
+
+debug:
+  visualize_commands: true
+  draw_pose_axes: true
+  show_performance: true
+  show_latency_graph: true
+  draw_path_history: true
+  history_maxlen: 30
