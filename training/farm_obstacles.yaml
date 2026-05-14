@@ -1,0 +1,23 @@
+# training/farm_obstacles.yaml
+# =============================
+# YOLOv8 dataset configuration for farm obstacle detection.
+# Edit the class list to match what you labeled in Roboflow.
+
+path: ./training/dataset   # root of the dataset (relative to project root)
+train: images/train
+val:   images/val
+test:  images/test         # optional
+
+# ── Classes ───────────────────────────────────────────────────────────────
+# Add or remove classes to match your Roboflow labels exactly.
+# Order matters — class 0 is the first item.
+nc: 7
+
+names:
+  0: person
+  1: rock
+  2: tractor
+  3: tree
+  4: irrigation_pipe
+  5: animal
+  6: debris

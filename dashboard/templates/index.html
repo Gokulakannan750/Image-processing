@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robotics Vision Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --green:    #3fb950;
+      --yellow:   #d29922;
+      --orange:   #f0883e;
+      --red:      #f85149;
+      --blue:     #58a6ff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 16px; font-weight: 600; letter-spacing: .5px; }
+    #live-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.5s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    #uptime { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+    /* ── Layout ── */
+    main {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Video panel ── */
+    #video-panel {
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #video-panel img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    /* ── Side panel ── */
+    #side-panel {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow-y: auto;
+    }
+
+    .card {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* State badge */
+    #state-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: #21262d;
+      transition: background .2s, color .2s;
+    }
+    .state-DRIVING    { background: #1a3a1a !important; color: var(--green)  !important; }
+    .state-TURNING    { background: #2a2a1a !important; color: var(--yellow) !important; }
+    .state-RECOVERING { background: #3a2a1a !important; color: var(--orange) !important; }
+    .state-STOPPED    { background: #3a1a1a !important; color: var(--red)    !important; }
+
+    /* Metrics grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .metric {
+      background: #21262d;
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .metric-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+    .metric-value { font-size: 22px; font-weight: 700; color: var(--blue); }
+    .metric-unit  { font-size: 11px; color: var(--muted); margin-left: 2px; }
+
+    /* Target info */
+    #target-info { font-size: 13px; color: var(--muted); }
+    #target-dist { color: var(--blue); font-weight: 600; font-size: 16px; }
+
+    /* Steering bar */
+    #steering-wrap {
+      position: relative;
+      height: 20px;
+      background: #21262d;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #steering-center {
+      position: absolute;
+      left: 50%; top: 0;
+      width: 2px; height: 100%;
+      background: var(--border);
+    }
+    #steering-bar {
+      position: absolute;
+      top: 3px; height: 14px;
+      border-radius: 7px;
+      background: var(--blue);
+      transition: left .1s, width .1s;
+    }
+    #steering-val { text-align: center; font-size: 12px; color: var(--muted); margin-top: 5px; }
+
+    /* Obstacles */
+    #obstacle-list { display: flex; flex-direction: column; gap: 6px; }
+    .obs-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #21262d;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+    .obs-pill.critical { border-left: 3px solid var(--red); }
+    .obs-pill.warning  { border-left: 3px solid var(--orange); }
+    .obs-label { font-weight: 600; text-transform: capitalize; flex: 1; }
+    .obs-conf  { color: var(--muted); }
+    .obs-crit-tag {
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--red);
+      color: #fff;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    #no-obstacles { color: var(--muted); font-size: 12px; }
+
+    /* Log feed */
+    #log-feed {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 10px 16px;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 11px;
+      min-height: 80px;
+    }
+    .log-line { color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+    .log-line .log-t { color: #3fb95060; margin-right: 6px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div id="live-dot"></div>
+  <h1>Robotics Vision Dashboard</h1>
+  <span id="uptime">Uptime: 0s</span>
+</header>
+
+<main>
+  <!-- Live video feed -->
+  <div id="video-panel">
+    <img src="/video" alt="Live camera feed" id="video-img" />
+  </div>
+
+  <!-- Status side panel -->
+  <div id="side-panel">
+
+    <!-- Vehicle state -->
+    <div class="card">
+      <div class="card-title">Vehicle State</div>
+      <div id="state-badge">IDLE</div>
+    </div>
+
+    <!-- FPS / Latency -->
+    <div class="card">
+      <div class="card-title">Performance</div>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-label">FPS</div>
+          <div class="metric-value" id="fps-val">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Latency</div>
+          <div class="metric-value" id="lat-val">—<span class="metric-unit">ms</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Target -->
+    <div class="card">
+      <div class="card-title">Navigation Target</div>
+      <div id="target-info">No target in frame</div>
+    </div>
+
+    <!-- Steering -->
+    <div class="card">
+      <div class="card-title">Steering Correction</div>
+      <div id="steering-wrap">
+        <div id="steering-center"></div>
+        <div id="steering-bar"></div>
+      </div>
+      <div id="steering-val">0.00 px</div>
+    </div>
+
+    <!-- Obstacles -->
+    <div class="card">
+      <div class="card-title">YOLO Obstacles</div>
+      <div id="obstacle-list">
+        <div id="no-obstacles">None detected</div>
+      </div>
+    </div>
+
+    <!-- Log feed -->
+    <div class="card-title" style="padding:10px 16px 4px; flex-shrink:0;">Recent Logs</div>
+    <div id="log-feed"></div>
+
+  </div>
+</main>
+
+<script>
+  const STATE_COLORS = { DRIVING:"green", TURNING:"yellow", RECOVERING:"orange", STOPPED:"red" };
+  let lastLogCount = 0;
+
+  function fmtUptime(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h ? `${h}h ${m}m ${sec}s` : m ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  function updateSteering(val) {
+    const maxPx = 300;
+    const clamped = Math.max(-maxPx, Math.min(maxPx, val));
+    const pct = ((clamped + maxPx) / (2 * maxPx)) * 100; // 0–100
+    const halfW = Math.abs(clamped) / (2 * maxPx) * 100;
+
+    const bar = document.getElementById("steering-bar");
+    if (clamped >= 0) {
+      bar.style.left  = "50%";
+      bar.style.width = halfW + "%";
+      bar.style.background = "#58a6ff";
+    } else {
+      bar.style.left  = (50 - halfW) + "%";
+      bar.style.width = halfW + "%";
+      bar.style.background = "#f0883e";
+    }
+    document.getElementById("steering-val").textContent = val.toFixed(1) + " px";
+  }
+
+  function renderObstacles(obstacles) {
+    const list = document.getElementById("obstacle-list");
+    if (!obstacles.length) {
+      list.innerHTML = '<div id="no-obstacles">None detected</div>';
+      return;
+    }
+    list.innerHTML = obstacles.map(o => `
+      <div class="obs-pill ${o.critical ? 'critical' : 'warning'}">
+        <span class="obs-label">${o.label}</span>
+        <span class="obs-conf">${o.confidence}%</span>
+        ${o.critical ? '<span class="obs-crit-tag">STOP</span>' : ''}
+      </div>
+    `).join("");
+  }
+
+  function renderLogs(lines) {
+    if (lines.length === lastLogCount) return;
+    lastLogCount = lines.length;
+    const feed = document.getElementById("log-feed");
+    feed.innerHTML = lines.slice(-30).map(l =>
+      `<div class="log-line"><span class="log-t">${l.t}</span>${l.msg}</div>`
+    ).join("");
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  async function poll() {
+    try {
+      const [statusRes, logsRes] = await Promise.all([
+        fetch("/status"), fetch("/logs")
+      ]);
+      const s = await statusRes.json();
+      const logs = await logsRes.json();
+
+      // State badge
+      const badge = document.getElementById("state-badge");
+      badge.textContent = s.state;
+      badge.className = "";
+      badge.classList.add("state-" + s.state);
+
+      // Perf
+      document.getElementById("fps-val").textContent = s.fps;
+      document.getElementById("lat-val").innerHTML =
+        s.latency_ms + '<span class="metric-unit">ms</span>';
+
+      // Target
+      const tgt = document.getElementById("target-info");
+      if (s.has_target && s.target_distance_m !== null) {
+        tgt.innerHTML = `Distance: <span id="target-dist">${s.target_distance_m} m</span>`;
+      } else {
+        tgt.textContent = "No target in frame";
+      }
+
+      // Steering
+      updateSteering(s.steering);
+
+      // Obstacles
+      renderObstacles(s.obstacles);
+
+      // Uptime
+      document.getElementById("uptime").textContent = "Uptime: " + fmtUptime(s.uptime_s);
+
+      // Logs
+      renderLogs(logs);
+
+    } catch (e) {
+      document.getElementById("live-dot").style.background = "#f85149";
+    }
+  }
+
+  // Poll every 500 ms
+  poll();
+  setInterval(poll, 500);
+</script>
+</body>
+</html>
