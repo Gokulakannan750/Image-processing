@@ -40,11 +40,16 @@ class ConfigManager:
 
     def __init__(self, config_path: str = None):
         self._config: Dict[str, Any] = {}
+        self._reload_callbacks: list = []   # callables invoked after every successful reload
         if config_path is None:
             config_path = os.path.join(os.path.dirname(__file__), "default.yaml")
 
         self.config_path = config_path
         self.load()
+
+    def on_reload(self, callback) -> None:
+        """Register a zero-argument callable that is invoked after every config reload."""
+        self._reload_callbacks.append(callback)
 
     def load(self) -> None:
         """Loads or reloads the configuration from the YAML file."""
@@ -58,9 +63,17 @@ class ConfigManager:
                 raw = yaml.safe_load(f) or {}
             self._config = _validate(raw)
             log.info(f"Loaded and validated configuration from {self.config_path}")
+            self._fire_reload_callbacks()
         except Exception as e:
             log.error(f"Failed to parse YAML config {self.config_path}: {e}")
             self._config = {}
+
+    def _fire_reload_callbacks(self) -> None:
+        for cb in self._reload_callbacks:
+            try:
+                cb()
+            except Exception as exc:
+                log.warning("Config reload callback %s raised: %s", cb, exc)
 
     # ── Hot-reload ────────────────────────────────────────────────────────────
 

@@ -34,6 +34,11 @@ class DetectorRegistry:
     def is_empty(self) -> bool:
         return len(self._detectors) == 0
 
+    def is_yolo_faulted(self) -> bool:
+        """Returns True if the YOLO detector is registered but has self-disabled."""
+        yolo = self._detectors.get("yolo")
+        return bool(yolo and getattr(yolo, "is_faulted", False))
+
     def shutdown(self) -> None:
         for name, detector in self._detectors.items():
             if hasattr(detector, "shutdown"):

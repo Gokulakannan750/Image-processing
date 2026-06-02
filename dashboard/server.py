@@ -14,7 +14,7 @@ Runs in a daemon thread; does not block the main vision loop.
 import threading
 import time
 from collections import deque
-from typing import List, Optional
+from typing import Generator, List, Optional
 
 import cv2
 import numpy as np
@@ -32,7 +32,7 @@ _HISTORY_LEN = 120  # retain 120 data points (~60 s at 0.5 s poll rate)
 
 
 class DashboardState:
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
 
         self._frame: Optional[np.ndarray] = None
@@ -57,6 +57,7 @@ class DashboardState:
         self.estop_count: int = 0
         self.frames_processed: int = 0
         self.robot_id: str = "robot-0"
+        self.yolo_faulted: bool = False
 
     def update(
         self,
@@ -113,6 +114,7 @@ class DashboardState:
                     for o in self.obstacles
                 ],
                 "uptime_s": round(self.uptime_s),
+                "yolo_faulted": self.yolo_faulted,
             }
 
     def get_prometheus_metrics(self) -> str:
@@ -163,6 +165,10 @@ class DashboardState:
                 "# TYPE agribot_frames_total counter",
                 f"agribot_frames_total {self.frames_processed}",
                 "",
+                "# HELP agribot_yolo_faulted Whether YOLO obstacle detection is disabled due to errors (0/1)",
+                "# TYPE agribot_yolo_faulted gauge",
+                f"agribot_yolo_faulted {int(self.yolo_faulted)}",
+                "",
             ]
         return "\n".join(lines)
 
@@ -195,12 +201,12 @@ dashboard_state = DashboardState()
 # ── Flask routes ───────────────────────────────────────────────────────────
 
 @app.route("/")
-def index():
+def index() -> str:
     return render_template("index.html")
 
 
 @app.route("/video")
-def video():
+def video() -> Response:
     return Response(
         _mjpeg_generator(),
         mimetype="multipart/x-mixed-replace; boundary=frame",
@@ -208,22 +214,22 @@ def video():
 
 
 @app.route("/status")
-def status():
+def status() -> Response:
     return jsonify(dashboard_state.get_status())
 
 
 @app.route("/logs")
-def logs():
+def logs() -> Response:
     return jsonify(dashboard_state.get_logs())
 
 
 @app.route("/metrics/history")
-def metrics_history():
+def metrics_history() -> Response:
     return jsonify(dashboard_state.get_history())
 
 
 @app.route("/metrics")
-def prometheus_metrics():
+def prometheus_metrics() -> Response:
     """Prometheus-compatible scrape endpoint."""
     return Response(
         dashboard_state.get_prometheus_metrics(),
@@ -231,7 +237,7 @@ def prometheus_metrics():
     )
 
 
-def _mjpeg_generator():
+def _mjpeg_generator() -> Generator[bytes, None, None]:
     while True:
         jpeg = dashboard_state.get_frame_jpeg()
         if jpeg:
@@ -246,7 +252,7 @@ def _mjpeg_generator():
 
 def start(host: str = "0.0.0.0", port: int = 5000) -> None:
     """Start the Flask server in a background daemon thread."""
-    def _run():
+    def _run() -> None:
         import logging as _logging
         _logging.getLogger("werkzeug").setLevel(_logging.ERROR)  # suppress Flask access logs
         app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

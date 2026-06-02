@@ -74,6 +74,11 @@ class SafetyMonitor:
                 raise SafetyViolationError(f"Emergency Stop Triggered: {reason}")
             log.warning("Auto-recovery is ON — holding E-STOP, waiting for camera to resume.")
             
+    def reload_config(self) -> None:
+        """Re-read tunable parameters from config. Called by ConfigManager on hot-reload."""
+        self.max_stale_ms = config_manager.get("safety.max_stale_frame_ms", 1500)
+        self._auto_recovery = config_manager.get("safety.enable_auto_recovery", True)
+
     def reset(self) -> None:
         """Resets the safety monitor (clears E-STOP state)."""
         self._e_stop_triggered = False

@@ -14,7 +14,7 @@ from detectors.base_detector import ObstacleDetection
 
 
 class CommandVisualizer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.enabled = config_manager.get("debug.visualize_commands", True)
         self.draw_history = config_manager.get("debug.draw_path_history", True)
         self.history_maxlen = config_manager.get("debug.history_maxlen", 30)

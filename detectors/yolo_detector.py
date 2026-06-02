@@ -246,6 +246,11 @@ class YoloDetector(BaseDetector):
     # Lifecycle
     # ------------------------------------------------------------------
 
+    @property
+    def is_faulted(self) -> bool:
+        """True when YOLO has self-disabled due to load or inference failures."""
+        return self._faulted
+
     def shutdown(self) -> None:
         if not self._running:
             return

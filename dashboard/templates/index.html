@@ -114,6 +114,17 @@
     .dot-green  { background: var(--green); }
     .dot-red    { background: var(--red); box-shadow: 0 0 6px var(--red); }
     .dot-yellow { background: var(--yellow); }
+    /* Alert banner */
+    #yolo-alert {
+      display: none;
+      background: #f8514922;
+      border: 1px solid var(--red);
+      color: var(--red);
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 20px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -122,6 +133,8 @@
   <h1>AgriBot Vision Dashboard</h1>
   <span id="uptime-badge">Uptime: —</span>
 </header>
+
+<div id="yolo-alert">⚠ YOLO obstacle detection DISABLED — inference errors exceeded threshold. Check logs.</div>
 
 <div class="grid">
   <!-- Live Video -->
@@ -222,6 +235,7 @@
       document.getElementById('uptime-badge').textContent = 'Uptime: ' + fmtUptime(d.uptime_s);
       document.getElementById('conn-dot').className =
         d.state==='STOPPED' ? 'dot dot-red' : d.state==='TURNING' ? 'dot dot-yellow' : 'dot dot-green';
+      document.getElementById('yolo-alert').style.display = d.yolo_faulted ? 'block' : 'none';
 
       const list = document.getElementById('obstacle-list');
       list.innerHTML = '';

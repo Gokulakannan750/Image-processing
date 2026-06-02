@@ -11,16 +11,16 @@ class NavigationFilter:
     Applies deadbands and smoothing to steering angles and cross-track errors
     to prevent jittery navigation.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         alpha = config_manager.get("navigation.smoothing_alpha", 0.3)
         self.steering_filter = PoseFilter(alpha=alpha)
         self.distance_filter = PoseFilter(alpha=alpha)
-        self.dead_zone_x = config_manager.get("navigation.dead_zone_x", 20.0)
+        self.dead_zone_x: float = config_manager.get("navigation.dead_zone_x", 20.0)
 
     def process_steering(self, raw_steering_angle: float) -> float:
         """Smooths raw steering angle."""
         return self.steering_filter.update(raw_steering_angle)
-        
+
     def process_alignment(self, cross_track_pixel_error: float) -> float:
         """Applies deadzone and smoothing to cross track error."""
         if abs(cross_track_pixel_error) < self.dead_zone_x:
@@ -30,6 +30,13 @@ class NavigationFilter:
             
         return smoothed
 
-    def reset(self):
+    def reload_config(self) -> None:
+        """Re-read tunable parameters from config. Called by ConfigManager on hot-reload."""
+        alpha = config_manager.get("navigation.smoothing_alpha", 0.3)
+        self.steering_filter.alpha = alpha
+        self.distance_filter.alpha = alpha
+        self.dead_zone_x = config_manager.get("navigation.dead_zone_x", 20.0)
+
+    def reset(self) -> None:
         self.steering_filter.reset()
         self.distance_filter.reset()

@@ -23,16 +23,16 @@ class HardwareCommand:
     command_type: str = field(compare=False)
     payload: Dict[str, Any] = field(default_factory=dict, compare=False)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.timestamp == 0.0:
             self.timestamp = time.time()
 
 class CommandQueue:
     """Thread-safe priority queue for hardware commands."""
-    
-    def __init__(self, maxsize: int = 100):
-        self._queue = queue.PriorityQueue(maxsize=maxsize)
-        
+
+    def __init__(self, maxsize: int = 100) -> None:
+        self._queue: queue.PriorityQueue = queue.PriorityQueue(maxsize=maxsize)
+
     def push(self, command: HardwareCommand) -> bool:
         """Pushes a command onto the queue. Returns True if successful."""
         try:
@@ -40,14 +40,14 @@ class CommandQueue:
             return True
         except queue.Full:
             return False
-            
-    def pop(self, timeout: float = None) -> HardwareCommand:
+
+    def pop(self, timeout: float = None) -> "HardwareCommand | None":
         """Pops the highest priority command from the queue. Blocks up to timeout seconds."""
         try:
             return self._queue.get(block=timeout is not None, timeout=timeout)
         except queue.Empty:
             return None
-            
+
     def clear(self) -> None:
         """Clears all pending commands (e.g. upon E-STOP)."""
         while not self._queue.empty():

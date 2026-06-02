@@ -44,7 +44,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--replay",   type=str,   default=None, help="Path to a recorded session directory")
     parser.add_argument("--simulate", action="store_true",      help="Run in synthetic simulation mode")
     parser.add_argument("--stress",   action="store_true",      help="Run in STRESS TEST mode")
-    parser.add_argument("--speed",    type=float, default=1.0,  help="Replay playback speed multiplier (e.g. 2.0 = 2x)")
+    parser.add_argument("--speed",     type=float, default=1.0,  help="Replay playback speed multiplier (e.g. 2.0 = 2x)")
+    parser.add_argument("--robot-id",  type=str,   default=None, help="Robot ID override (overrides config robot_id)")
     parser.add_argument("--max-queue-depth", type=int, default=2,
                         help="Max vision frames queued before dropping stale ones (frame-skip)")
     return parser.parse_args()
@@ -58,7 +59,8 @@ def main() -> None:
         config_manager.config_path = args.config
         config_manager.load()
 
-    robot_id = config_manager.get("robot_id", "robot-0")
+    # CLI --robot-id takes precedence over config file value
+    robot_id: str = args.robot_id or config_manager.get("robot_id", "robot-0")
     set_robot_id(robot_id)
     dashboard_state.robot_id = robot_id
     log.info("Robot ID: %s", robot_id)
@@ -66,7 +68,7 @@ def main() -> None:
     # ── Config hot-reload: file-watcher (cross-platform) + SIGHUP (Unix) ──
     config_manager.start_watch(interval_s=2.0)
 
-    def _reload_config(signum, frame):  # noqa: ARG001
+    def _reload_config(signum: int, frame: object) -> None:  # noqa: ARG001
         log.info("SIGHUP received — reloading configuration from %s", config_manager.config_path)
         config_manager.load()
 
@@ -85,6 +87,20 @@ def main() -> None:
     vision_pipeline = FramePipeline(registry)
 
     decision_engine = DecisionEngine(command_queue)
+
+    # ── Register hot-reload callbacks for live tunable components ─────────
+    def _on_config_reload() -> None:
+        safety_monitor.reload_config()
+        decision_engine.state_machine.reload_config()
+        decision_engine.recovery_manager.reload_config()
+        decision_engine.nav_filter.reload_config()
+        # CLI --robot-id always wins; only update from config if no CLI override
+        new_id = args.robot_id or config_manager.get("robot_id", "robot-0")
+        set_robot_id(new_id)
+        dashboard_state.robot_id = new_id
+        log.info("Live components updated from reloaded config.")
+
+    config_manager.on_reload(_on_config_reload)
     cmd_visualizer = CommandVisualizer()
     recorder = DataRecorder()
     stress_simulator = StressTestSimulator()
@@ -178,6 +194,7 @@ def main() -> None:
                     has_target=result.has_targets,
                     target_distance_m=primary.distance_m if primary else None,
                 )
+                dashboard_state.yolo_faulted = registry.is_yolo_faulted()
 
                 cv2.imshow("Robotics Vision Output", annotated_frame)
 

@@ -19,10 +19,10 @@ class State(Enum):
     STOPPED = auto()
 
 class VehicleStateMachine:
-    def __init__(self):
-        self._state = State.IDLE
-        self._last_transition_time = 0.0
-        self.min_duration_s = config_manager.get("navigation.min_state_duration_s", 0.5)
+    def __init__(self) -> None:
+        self._state: State = State.IDLE
+        self._last_transition_time: float = 0.0
+        self.min_duration_s: float = config_manager.get("navigation.min_state_duration_s", 0.5)
 
     @property
     def current_state(self) -> State:
@@ -41,6 +41,10 @@ class VehicleStateMachine:
             return False
             
         return True
+
+    def reload_config(self) -> None:
+        """Re-read tunable parameters from config. Called by ConfigManager on hot-reload."""
+        self.min_duration_s = config_manager.get("navigation.min_state_duration_s", 0.5)
 
     def transition_to(self, new_state: State, reason: str = "") -> bool:
         if not self.can_transition(new_state):
