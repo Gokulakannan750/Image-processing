@@ -12,6 +12,26 @@ import sys
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# Module-level robot_id — set once by main() via set_robot_id().
+_robot_id: str = "robot-0"
+
+
+def set_robot_id(robot_id: str) -> None:
+    """Call once at startup to stamp every log line with the robot identity."""
+    global _robot_id
+    _robot_id = robot_id
+    # Re-stamp existing handlers by rebuilding the formatter on the root logger
+    for handler in logging.root.handlers:
+        handler.setFormatter(_make_formatter())
+
+
+def _make_formatter() -> logging.Formatter:
+    return logging.Formatter(
+        fmt=f"%(asctime)s.%(msecs)03d | {_robot_id} | %(levelname)-8s | [%(name)s] | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
 def setup_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
     logger = logging.getLogger(name)
     if logger.handlers:
@@ -19,10 +39,7 @@ def setup_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
 
     logger.setLevel(logging.DEBUG)
 
-    formatter = logging.Formatter(
-        fmt="%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(name)s] | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    formatter = _make_formatter()
 
     # Console
     console_handler = logging.StreamHandler(sys.stdout)

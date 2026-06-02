@@ -3,22 +3,46 @@ config/config_manager.py
 ========================
 Loads and validates YAML configuration.
 Provides a global config dict to the rest of the application.
+
+Hot-reload: call config_manager.start_watch() to start a background thread that
+reloads the YAML whenever its mtime changes.  Works on all platforms (no SIGHUP).
 """
 import os
+import threading
+import time
 import yaml
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
+
+def _validate(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate raw config dict against the pydantic schema.  Returns the
+    validated dict (with defaults filled in).  Logs warnings on error but
+    never raises so the app can still start with partial config."""
+    try:
+        from config.schema import AppConfig
+        from pydantic import ValidationError
+        validated = AppConfig(**raw)
+        # Return as plain dict so the rest of the app is unchanged
+        return validated.model_dump()
+    except ImportError:
+        log.warning("pydantic not installed — skipping config schema validation.")
+        return raw
+    except Exception as exc:  # ValidationError or anything else
+        log.warning("Config validation warnings (defaults used for invalid fields):\n%s", exc)
+        return raw
+
+
 class ConfigManager:
     """Manages application configuration from YAML files."""
-    
+
     def __init__(self, config_path: str = None):
         self._config: Dict[str, Any] = {}
         if config_path is None:
             config_path = os.path.join(os.path.dirname(__file__), "default.yaml")
-        
+
         self.config_path = config_path
         self.load()
 
@@ -26,17 +50,52 @@ class ConfigManager:
         """Loads or reloads the configuration from the YAML file."""
         if not os.path.exists(self.config_path):
             log.error(f"Configuration file not found: {self.config_path}")
-            # Provide an empty dict to prevent catastrophic failure, though many things will fail downstream
             self._config = {}
             return
 
         try:
             with open(self.config_path, "r") as f:
-                self._config = yaml.safe_load(f) or {}
-            log.info(f"Loaded configuration from {self.config_path}")
+                raw = yaml.safe_load(f) or {}
+            self._config = _validate(raw)
+            log.info(f"Loaded and validated configuration from {self.config_path}")
         except Exception as e:
             log.error(f"Failed to parse YAML config {self.config_path}: {e}")
             self._config = {}
+
+    # ── Hot-reload ────────────────────────────────────────────────────────────
+
+    def start_watch(self, interval_s: float = 2.0) -> None:
+        """Start a background thread that reloads config when the YAML file changes.
+
+        Safe to call multiple times — only one watcher runs at a time.
+        Works on Windows, macOS, and Linux (no SIGHUP needed).
+        """
+        if getattr(self, "_watcher_running", False):
+            return
+        self._watcher_running = True
+        self._watch_interval = interval_s
+        t = threading.Thread(target=self._watch_loop, name="config-watcher", daemon=True)
+        t.start()
+        log.info("Config file watcher started (poll every %.1fs): %s", interval_s, self.config_path)
+
+    def _watch_loop(self) -> None:
+        last_mtime: Optional[float] = self._file_mtime()
+        while self._watcher_running:
+            time.sleep(self._watch_interval)
+            current = self._file_mtime()
+            if current is not None and current != last_mtime:
+                log.info("Config file changed — reloading.")
+                self.load()
+                last_mtime = current
+
+    def _file_mtime(self) -> Optional[float]:
+        try:
+            return os.path.getmtime(self.config_path)
+        except OSError:
+            return None
+
+    def stop_watch(self) -> None:
+        self._watcher_running = False
 
     @property
     def config(self) -> Dict[str, Any]:

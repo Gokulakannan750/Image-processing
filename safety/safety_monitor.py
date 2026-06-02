@@ -22,14 +22,19 @@ class SafetyMonitor:
     def __init__(self, command_queue: CommandQueue):
         self.command_queue = command_queue
         self.max_stale_ms = config_manager.get("safety.max_stale_frame_ms", 1500)
+        self._auto_recovery: bool = config_manager.get("safety.enable_auto_recovery", True)
         self.last_frame_time: Optional[float] = None
         self._e_stop_triggered = False
 
     def notify_frame_received(self) -> None:
         """Called by the camera or vision pipeline when a new frame is acquired."""
-        self.last_frame_time = time.time()
-        # If we were in E-STOP due to a stale frame, but it's back, we might want to auto-recover 
-        # depending on config. For now, we leave the E-STOP active until manually cleared.
+        now = time.time()
+        self.last_frame_time = now
+
+        # Auto-recover from a stale-frame E-STOP once frames resume.
+        if self._e_stop_triggered and self._auto_recovery:
+            log.info("Camera feed resumed — auto-resetting stale-frame E-STOP.")
+            self.reset()
 
     def check_health(self) -> None:
         """
@@ -47,7 +52,13 @@ class SafetyMonitor:
                 self.trigger_e_stop(f"Stale frame detected: {stale_ms:.1f}ms without a new frame.")
 
     def trigger_e_stop(self, reason: str) -> None:
-        """Injects an E_STOP command with CRITICAL priority."""
+        """Injects an E_STOP command with CRITICAL priority.
+
+        When auto-recovery is enabled the exception is suppressed so the main
+        loop keeps running and can recover once the camera feed resumes.
+        When auto-recovery is disabled the exception propagates and the process
+        exits immediately (fail-safe behaviour for unattended deployments).
+        """
         if not self._e_stop_triggered:
             log.critical("SAFETY VIOLATION: %s", reason)
             cmd = HardwareCommand(
@@ -58,7 +69,10 @@ class SafetyMonitor:
             )
             self.command_queue.push(cmd)
             self._e_stop_triggered = True
-            raise SafetyViolationError(f"Emergency Stop Triggered: {reason}")
+
+            if not self._auto_recovery:
+                raise SafetyViolationError(f"Emergency Stop Triggered: {reason}")
+            log.warning("Auto-recovery is ON — holding E-STOP, waiting for camera to resume.")
             
     def reset(self) -> None:
         """Resets the safety monitor (clears E-STOP state)."""

@@ -46,22 +46,39 @@ class YoloDetector(BaseDetector):
     main vision loop while YOLO runs asynchronously.
     """
 
-    def __init__(self) -> None:
-        try:
-            from ultralytics import YOLO
-        except ImportError:
-            raise ImportError(
-                "ultralytics is required for YoloDetector. "
-                "Install it with: pip install ultralytics"
-            )
+    # After this many consecutive inference errors, YOLO is disabled for safety.
+    _MAX_CONSECUTIVE_ERRORS = 5
 
-        model_path = config_manager.get("detectors.yolo.model", "yolov8n.pt")
+    def __init__(self) -> None:
+        self._model = None
+        self._class_names: dict = {}
+        self._filter_classes: Optional[list] = None
         self._conf = config_manager.get("detectors.yolo.confidence", 0.50)
         self._danger_ratio = config_manager.get("detectors.yolo.danger_zone_ratio", 0.12)
         self._device = config_manager.get("detectors.yolo.device", "cpu")
+        self._faulted = False          # True → inference disabled, return empty results
+        self._consecutive_errors = 0
 
+        try:
+            from ultralytics import YOLO
+        except ImportError:
+            log.error(
+                "ultralytics not installed — YOLO obstacle detection disabled. "
+                "Install with: pip install ultralytics"
+            )
+            self._faulted = True
+            self._start_dummy_thread()
+            return
+
+        model_path = config_manager.get("detectors.yolo.model", "yolov8n.pt")
         log.info("Loading YOLO model: %s on device=%s", model_path, self._device)
-        self._model = YOLO(model_path)
+        try:
+            self._model = YOLO(model_path)
+        except Exception as exc:
+            log.error("Failed to load YOLO model '%s': %s — obstacle detection disabled.", model_path, exc)
+            self._faulted = True
+            self._start_dummy_thread()
+            return
 
         # If the model has its own class names (custom trained), use them.
         # Otherwise fall back to the hardcoded COCO obstacle subset.
@@ -77,11 +94,14 @@ class YoloDetector(BaseDetector):
                      len(self._filter_classes))
 
         # Warm-up pass so the first real frame isn't slow
-        self._model.predict(
-            np.zeros((64, 64, 3), dtype=np.uint8),
-            verbose=False,
-            device=self._device,
-        )
+        try:
+            self._model.predict(
+                np.zeros((64, 64, 3), dtype=np.uint8),
+                verbose=False,
+                device=self._device,
+            )
+        except Exception as exc:
+            log.warning("YOLO warm-up failed (non-fatal): %s", exc)
 
         self._lock = threading.Lock()
         self._pending_frame: Optional[np.ndarray] = None
@@ -94,6 +114,16 @@ class YoloDetector(BaseDetector):
         )
         self._thread.start()
         log.info("YoloDetector ready — background inference thread started.")
+
+    def _start_dummy_thread(self) -> None:
+        """Start a no-op thread so shutdown() is always safe to call."""
+        self._lock = threading.Lock()
+        self._pending_frame = None
+        self._latest_obstacles = []
+        self._new_frame_event = threading.Event()
+        self._running = False
+        self._thread = threading.Thread(target=lambda: None, daemon=True)
+        self._thread.start()
 
     # ------------------------------------------------------------------
     # Background thread
@@ -117,8 +147,21 @@ class YoloDetector(BaseDetector):
                 obstacles = self._run_inference(frame)
                 with self._lock:
                     self._latest_obstacles = obstacles
+                self._consecutive_errors = 0  # reset on success
             except Exception as exc:
-                log.error("YOLO inference error: %s", exc)
+                self._consecutive_errors += 1
+                log.error(
+                    "YOLO inference error (%d/%d): %s",
+                    self._consecutive_errors, self._MAX_CONSECUTIVE_ERRORS, exc,
+                )
+                if self._consecutive_errors >= self._MAX_CONSECUTIVE_ERRORS:
+                    log.critical(
+                        "YOLO disabled after %d consecutive errors — "
+                        "continuing without obstacle detection.",
+                        self._MAX_CONSECUTIVE_ERRORS,
+                    )
+                    self._faulted = True
+                    self._running = False
 
     def _run_inference(self, frame: np.ndarray) -> List[ObstacleDetection]:
         h, w = frame.shape[:2]
@@ -158,6 +201,10 @@ class YoloDetector(BaseDetector):
     # ------------------------------------------------------------------
 
     def process_frame(self, frame: np.ndarray) -> Tuple[np.ndarray, DetectionResult]:
+        if self._faulted:
+            # Return empty result — obstacle detection unavailable but don't crash
+            return frame, DetectionResult()
+
         t0 = time.time()
 
         # Hand the frame to the background thread (non-blocking)

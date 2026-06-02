@@ -28,6 +28,9 @@ app = Flask(__name__)
 
 # ── Shared state (written by main loop, read by Flask) ─────────────────────
 
+_HISTORY_LEN = 120  # retain 120 data points (~60 s at 0.5 s poll rate)
+
+
 class DashboardState:
     def __init__(self):
         self._lock = threading.Lock()
@@ -44,6 +47,16 @@ class DashboardState:
         self.uptime_s: float = 0.0
         self._start_time: float = time.time()
         self._log_buffer: deque = deque(maxlen=60)
+
+        # Ring buffers for historical trend data
+        self._fps_history: deque = deque(maxlen=_HISTORY_LEN)
+        self._latency_history: deque = deque(maxlen=_HISTORY_LEN)
+        self._steering_history: deque = deque(maxlen=_HISTORY_LEN)
+
+        # Prometheus counters (monotonically increasing)
+        self.estop_count: int = 0
+        self.frames_processed: int = 0
+        self.robot_id: str = "robot-0"
 
     def update(
         self,
@@ -67,6 +80,12 @@ class DashboardState:
             self.has_target = has_target
             self.target_distance_m = target_distance_m
             self.uptime_s = time.time() - self._start_time
+            self._fps_history.append(round(fps, 1))
+            self._latency_history.append(round(latency_ms, 1))
+            self._steering_history.append(round(steering, 2))
+            self.frames_processed += 1
+            if vehicle_state == "STOPPED" and any(o.is_critical for o in obstacles):
+                self.estop_count += 1
 
     def push_log(self, message: str) -> None:
         with self._lock:
@@ -75,6 +94,7 @@ class DashboardState:
     def get_status(self) -> dict:
         with self._lock:
             return {
+                "robot_id": self.robot_id,
                 "state": self.vehicle_state,
                 "fps": round(self.fps, 1),
                 "latency_ms": round(self.latency_ms, 1),
@@ -93,6 +113,65 @@ class DashboardState:
                     for o in self.obstacles
                 ],
                 "uptime_s": round(self.uptime_s),
+            }
+
+    def get_prometheus_metrics(self) -> str:
+        """Return a Prometheus text-format metrics payload."""
+        with self._lock:
+            state_val = {
+                "IDLE": 0, "DRIVING": 1, "TURNING": 2,
+                "RECOVERING": 3, "STOPPED": 4,
+            }.get(self.vehicle_state, -1)
+            lines = [
+                "# HELP agribot_fps Current camera processing FPS",
+                "# TYPE agribot_fps gauge",
+                f"agribot_fps {self.fps:.2f}",
+                "",
+                "# HELP agribot_latency_ms Frame processing latency in milliseconds",
+                "# TYPE agribot_latency_ms gauge",
+                f"agribot_latency_ms {self.latency_ms:.2f}",
+                "",
+                "# HELP agribot_steering_correction Current steering correction value",
+                "# TYPE agribot_steering_correction gauge",
+                f"agribot_steering_correction {self.steering:.4f}",
+                "",
+                "# HELP agribot_vehicle_state Encoded vehicle state (0=IDLE 1=DRIVING 2=TURNING 3=RECOVERING 4=STOPPED)",
+                "# TYPE agribot_vehicle_state gauge",
+                f"agribot_vehicle_state {state_val}",
+                "",
+                "# HELP agribot_obstacle_count Number of currently detected obstacles",
+                "# TYPE agribot_obstacle_count gauge",
+                f"agribot_obstacle_count {len(self.obstacles)}",
+                "",
+                "# HELP agribot_critical_obstacle Whether a critical obstacle is blocking the path (0/1)",
+                "# TYPE agribot_critical_obstacle gauge",
+                f"agribot_critical_obstacle {int(self.has_critical_obstacle)}",
+                "",
+                "# HELP agribot_has_target Whether a navigation target is currently detected (0/1)",
+                "# TYPE agribot_has_target gauge",
+                f"agribot_has_target {int(self.has_target)}",
+                "",
+                "# HELP agribot_uptime_seconds Seconds since the system started",
+                "# TYPE agribot_uptime_seconds counter",
+                f"agribot_uptime_seconds {self.uptime_s:.1f}",
+                "",
+                "# HELP agribot_estop_total Total number of emergency stop events triggered",
+                "# TYPE agribot_estop_total counter",
+                f"agribot_estop_total {self.estop_count}",
+                "",
+                "# HELP agribot_frames_total Total number of frames processed",
+                "# TYPE agribot_frames_total counter",
+                f"agribot_frames_total {self.frames_processed}",
+                "",
+            ]
+        return "\n".join(lines)
+
+    def get_history(self) -> dict:
+        with self._lock:
+            return {
+                "fps": list(self._fps_history),
+                "latency_ms": list(self._latency_history),
+                "steering": list(self._steering_history),
             }
 
     def get_logs(self) -> List[dict]:
@@ -136,6 +215,20 @@ def status():
 @app.route("/logs")
 def logs():
     return jsonify(dashboard_state.get_logs())
+
+
+@app.route("/metrics/history")
+def metrics_history():
+    return jsonify(dashboard_state.get_history())
+
+
+@app.route("/metrics")
+def prometheus_metrics():
+    """Prometheus-compatible scrape endpoint."""
+    return Response(
+        dashboard_state.get_prometheus_metrics(),
+        mimetype="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 def _mjpeg_generator():

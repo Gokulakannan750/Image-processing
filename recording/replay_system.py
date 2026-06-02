@@ -17,12 +17,15 @@ log = get_logger(__name__)
 class ReplayCameraStream:
     """
     Imitates the CameraStream interface but reads from a recording directory.
+    speed > 1.0 fast-forwards (e.g. 2.0 = double speed); speed=0 means no delay.
     """
-    def __init__(self, session_dir: str, fps: float = 30.0):
+    def __init__(self, session_dir: str, fps: float = 30.0, speed: float = 1.0):
         self.session_dir = session_dir
         self.raw_dir = os.path.join(session_dir, "raw")
         self.fps = fps
-        self.delay_s = 1.0 / fps if fps > 0 else 0.0
+        effective_fps = fps * max(speed, 0.01) if speed > 0 else float("inf")
+        self.delay_s = 1.0 / effective_fps if effective_fps < float("inf") else 0.0
+        self._speed = speed
         
         self.frames = []
         self.current_idx = 0
@@ -41,7 +44,7 @@ class ReplayCameraStream:
             log.error("No frames found in %s", self.raw_dir)
             return False
             
-        log.info("Replay stream opened: %d frames found.", len(self.frames))
+        log.info("Replay stream opened: %d frames found (speed=%.1fx).", len(self.frames), self._speed)
         self.is_open = True
         self.current_idx = 0
         return True

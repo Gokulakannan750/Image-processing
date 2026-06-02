@@ -72,21 +72,23 @@ class DecisionEngine:
         return current_state, steering_correction
 
     def _issue_u_turn_command(self, row_info: str) -> None:
+        robot_id = config_manager.get("robot_id", "robot-0")
         cmd = HardwareCommand(
             priority=CommandPriority.NORMAL,
             timestamp=0.0,
             command_type="U_TURN",
-            payload={"row_info": row_info}
+            payload={"row_info": row_info, "robot_id": robot_id}
         )
         if self.command_queue.push(cmd):
-            log.info("Queued U_TURN command for %s", row_info)
+            log.info("Queued U_TURN command for %s (robot=%s)", row_info, robot_id)
 
     def _issue_stop_command(self) -> None:
+        robot_id = config_manager.get("robot_id", "robot-0")
         cmd = HardwareCommand(
             priority=CommandPriority.CRITICAL,
             timestamp=0.0,
             command_type="E_STOP",
-            payload={"reason": "Recovery timeout exceeded"}
+            payload={"reason": "Recovery timeout exceeded", "robot_id": robot_id}
         )
         self.command_queue.push(cmd)
 

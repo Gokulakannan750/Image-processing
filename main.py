@@ -6,13 +6,15 @@ Integrates threaded camera streams, dynamic detector registry,
 decision engine, safety monitoring, and command queue execution.
 """
 import argparse
+import signal
 import sys
 import time
+from collections import deque
 
 import cv2
 
 from config.config_manager import config_manager
-from utils.logger import setup_logger
+from utils.logger import setup_logger, set_robot_id
 from utils.exceptions import RoboticsBaseError
 
 # Setup structured logger before importing components that log during init
@@ -38,10 +40,13 @@ import dashboard.server as dashboard_server
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Professional Agricultural Robotics Stack")
-    parser.add_argument("--config",   type=str, default=None,  help="Path to custom YAML config file")
-    parser.add_argument("--replay",   type=str, default=None,  help="Path to a recorded session directory")
-    parser.add_argument("--simulate", action="store_true",     help="Run in synthetic simulation mode")
-    parser.add_argument("--stress",   action="store_true",     help="Run in STRESS TEST mode")
+    parser.add_argument("--config",   type=str,   default=None, help="Path to custom YAML config file")
+    parser.add_argument("--replay",   type=str,   default=None, help="Path to a recorded session directory")
+    parser.add_argument("--simulate", action="store_true",      help="Run in synthetic simulation mode")
+    parser.add_argument("--stress",   action="store_true",      help="Run in STRESS TEST mode")
+    parser.add_argument("--speed",    type=float, default=1.0,  help="Replay playback speed multiplier (e.g. 2.0 = 2x)")
+    parser.add_argument("--max-queue-depth", type=int, default=2,
+                        help="Max vision frames queued before dropping stale ones (frame-skip)")
     return parser.parse_args()
 
 
@@ -53,9 +58,28 @@ def main() -> None:
         config_manager.config_path = args.config
         config_manager.load()
 
+    robot_id = config_manager.get("robot_id", "robot-0")
+    set_robot_id(robot_id)
+    dashboard_state.robot_id = robot_id
+    log.info("Robot ID: %s", robot_id)
+
+    # ── Config hot-reload: file-watcher (cross-platform) + SIGHUP (Unix) ──
+    config_manager.start_watch(interval_s=2.0)
+
+    def _reload_config(signum, frame):  # noqa: ARG001
+        log.info("SIGHUP received — reloading configuration from %s", config_manager.config_path)
+        config_manager.load()
+
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, _reload_config)
+
     command_queue = CommandQueue()
     controller = MachineController(command_queue)
     safety_monitor = SafetyMonitor(command_queue)
+
+    # ── Frame-skip queue (drops stale frames when processing lags) ────────
+    _max_depth = args.max_queue_depth
+    _frame_queue: deque = deque(maxlen=_max_depth)
 
     registry = build_detectors_from_config()
     vision_pipeline = FramePipeline(registry)
@@ -70,7 +94,7 @@ def main() -> None:
     if args.replay:
         log.info(f"STARTING IN REPLAY MODE: {args.replay}")
         fps = config_manager.get("camera.fps", 30)
-        camera = ReplayCameraStream(args.replay, fps=fps)
+        camera = ReplayCameraStream(args.replay, fps=fps, speed=args.speed)
     elif args.simulate:
         log.info("STARTING IN SYNTHETIC SIMULATION MODE")
         fps = config_manager.get("camera.fps", 30)
@@ -111,6 +135,13 @@ def main() -> None:
                     if frame is None:
                         log.debug("Stress test: frame dropped.")
                         continue
+
+                # Frame-skip: push into bounded deque; if it was full the oldest
+                # frame is silently dropped, keeping only the freshest frame.
+                _frame_queue.append(frame)
+                if len(_frame_queue) == _max_depth:
+                    log.debug("Frame queue full — dropping stale frame (processing lag).")
+                frame = _frame_queue.pop()
 
                 safety_monitor.notify_frame_received()
                 safety_monitor.check_health()

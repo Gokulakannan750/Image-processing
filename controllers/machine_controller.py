@@ -5,7 +5,7 @@ Hardware abstraction for the agricultural machine's CAN-bus controller.
 Consumes commands from the CommandQueue.
 """
 import time
-from typing import Optional
+from typing import Optional  # noqa: F401 — used in type hints throughout
 
 from config.config_manager import config_manager
 from controllers.command_queue import CommandQueue, HardwareCommand, CommandPriority
@@ -70,13 +70,42 @@ class MachineController:
         else:
             log.warning("Unknown command type: %s", cmd.command_type)
 
+    # CAN arbitration IDs for safety messages (configurable)
+    _ESTOP_CMD_ID: int = 0x000   # Highest priority on standard CAN
+
     def _execute_e_stop(self) -> None:
         """Executes an emergency stop command immediately."""
         log.critical("!!! EXECUTING EMERGENCY STOP !!!")
-        self.command_queue.clear()  # Clear pending commands
-        # TODO: Send actual E-STOP CAN message
-        if self._bus is not None:
-             pass # Implement CAN E-STOP message here
+        self.command_queue.clear()
+
+        if self._bus is None:
+            log.warning("MOCK E-STOP — no CAN bus connected.")
+            return
+
+        estop_id = config_manager.get("controller.estop_command_id", self._ESTOP_CMD_ID)
+        estop_data = config_manager.get(
+            "controller.estop_command_data", [0xFF, 0xFF, 0, 0, 0, 0, 0, 0]
+        )
+
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                msg = can.Message(
+                    arbitration_id=estop_id,
+                    data=estop_data,
+                    is_extended_id=False,
+                )
+                self._bus.send(msg, timeout=0.05)
+                log.critical(
+                    "E-STOP CAN sent (attempt %d/%d) — ID=%s data=%s",
+                    attempt, max_attempts, hex(estop_id), estop_data,
+                )
+                return  # Success — exit after first confirmed send
+            except Exception as exc:
+                log.error("E-STOP CAN send failed (attempt %d/%d): %s", attempt, max_attempts, exc)
+                time.sleep(0.01 * attempt)  # brief exponential backoff
+
+        log.critical("E-STOP CAN message could not be delivered after %d attempts.", max_attempts)
 
     def _execute_u_turn(self, row_info: str) -> bool:
         now = time.time()
@@ -92,17 +121,28 @@ class MachineController:
         cmd_data = config_manager.get("controller.turn_command_data", [1,0,0,0,0,0,0,0])
 
         if self._bus is not None:
-            try:
-                msg = can.Message(
-                    arbitration_id=cmd_id,
-                    data=cmd_data,
-                    is_extended_id=False,
-                )
-                self._bus.send(msg)
-                log.info("CAN sent — ID=%s  data=%s", hex(cmd_id), cmd_data)
-            except Exception as exc:
-                log.error("CAN send failed: %s", exc)
-                raise ControllerError(f"Failed to send CAN message: {exc}")
+            max_attempts = 3
+            last_exc: Optional[Exception] = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    msg = can.Message(
+                        arbitration_id=cmd_id,
+                        data=cmd_data,
+                        is_extended_id=False,
+                    )
+                    self._bus.send(msg, timeout=0.05)
+                    log.info(
+                        "CAN sent (attempt %d/%d) — ID=%s  data=%s",
+                        attempt, max_attempts, hex(cmd_id), cmd_data,
+                    )
+                    last_exc = None
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    log.warning("CAN send failed (attempt %d/%d): %s", attempt, max_attempts, exc)
+                    time.sleep(0.01 * attempt)
+            if last_exc is not None:
+                raise ControllerError(f"Failed to send U-TURN CAN message after {max_attempts} attempts: {last_exc}")
         else:
             log.info("MOCK — would send CAN ID=%s  data=%s", hex(cmd_id), cmd_data)
 

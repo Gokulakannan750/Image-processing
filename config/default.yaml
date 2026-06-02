@@ -1,5 +1,7 @@
 # Professional Robotics Framework Configuration
 
+robot_id: "robot-0"   # Unique identifier — change per machine in a fleet
+
 camera:
   index: 0
   # source overrides index — set to a device index (int) or stream URL (string)
@@ -53,6 +55,8 @@ controller:
   can_bitrate: 500000
   turn_command_id: 291
   turn_command_data: [1, 0, 0, 0, 0, 0, 0, 0]
+  estop_command_id: 0          # Arbitration ID 0x000 — highest CAN priority
+  estop_command_data: [255, 255, 0, 0, 0, 0, 0, 0]
 
 safety:
   max_stale_frame_ms: 1500
