@@ -3,10 +3,12 @@ testing/report_generator.py
 ==========================
 Generates automated test reports from a recording session.
 """
+
 import os
 import json
 import numpy as np
-from typing import Dict, Any, List
+from typing import Any, Dict, List  # noqa: F401
+
 
 class ReportGenerator:
     @staticmethod
@@ -28,11 +30,11 @@ class ReportGenerator:
         latencies = [f["latency_ms"] for f in frame_data]
         stabilities = [f["stability"] for f in frame_data]
         detection_counts = [len(f["targets"]) for f in frame_data]
-        
+
         # Calculate marker loss events (target count drops to 0)
         marker_losses = 0
         for i in range(1, len(detection_counts)):
-            if detection_counts[i-1] > 0 and detection_counts[i] == 0:
+            if detection_counts[i - 1] > 0 and detection_counts[i] == 0:
                 marker_losses += 1
 
         report = {
@@ -42,14 +44,14 @@ class ReportGenerator:
             "max_latency_ms": float(np.max(latencies)),
             "avg_stability": float(np.mean(stabilities)),
             "marker_loss_events": marker_losses,
-            "avg_targets_per_frame": float(np.mean(detection_counts))
+            "avg_targets_per_frame": float(np.mean(detection_counts)),
         }
 
         # Save report
         report_path = os.path.join(session_dir, "test_report.json")
         with open(report_path, "w") as f:
             json.dump(report, f, indent=4)
-            
+
         # Create text summary
         summary_path = os.path.join(session_dir, "summary.txt")
         with open(summary_path, "w") as f:

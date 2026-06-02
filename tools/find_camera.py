@@ -4,12 +4,13 @@ tools/find_camera.py
 Scans all camera indices and backends to find working cameras.
 Run this first to diagnose camera issues.
 """
+
 import cv2
 
 BACKENDS = [
-    (cv2.CAP_DSHOW,  "DirectShow (DSHOW)"),
-    (cv2.CAP_MSMF,   "Media Foundation (MSMF)"),
-    (cv2.CAP_ANY,    "Auto"),
+    (cv2.CAP_DSHOW, "DirectShow (DSHOW)"),
+    (cv2.CAP_MSMF, "Media Foundation (MSMF)"),
+    (cv2.CAP_ANY, "Auto"),
 ]
 
 print("\n=== Camera Scanner ===\n")
@@ -34,10 +35,10 @@ if not found:
     print("  2. Windows camera privacy blocked — Settings > Privacy > Camera > ON")
     print("  3. Driver not installed — check Device Manager")
 else:
-    print(f"\n  Best choice for config/default.yaml:")
+    print("\n  Best choice for config/default.yaml:")
     index, backend, name = found[0]
-    print(f"    camera:")
+    print("    camera:")
     print(f"      index: {index}")
     if backend == cv2.CAP_DSHOW:
-        print(f"      backend: DSHOW   # add this to camera_stream.py if needed")
+        print("      backend: DSHOW   # add this to camera_stream.py if needed")
     print(f"\n  Total cameras found: {len(found)}")

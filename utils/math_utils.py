@@ -3,15 +3,17 @@ utils/math_utils.py
 ===================
 Geometry and rotation conversion utilities.
 """
+
 import cv2
 import numpy as np
+
 
 def rotation_vector_to_euler(rvec):
     """
     Converts a rotation vector to Euler angles (Yaw, Pitch, Roll) in degrees.
     """
     rmat, _ = cv2.Rodrigues(rvec)
-    
+
     # Extract Euler angles from rotation matrix
     # Note: ArUco coordinate system is Z-forward, X-right, Y-down
     # We want standard Euler angles
@@ -28,6 +30,7 @@ def rotation_vector_to_euler(rvec):
         z = 0
 
     return np.degrees(x), np.degrees(y), np.degrees(z)
+
 
 def estimate_blur(image):
     """

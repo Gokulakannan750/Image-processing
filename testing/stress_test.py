@@ -3,11 +3,13 @@ testing/stress_test.py
 ======================
 Simulates system stress (frame drops, lag, noise) to validate robustness.
 """
+
 import time
 import random
 import numpy as np
 import cv2
 from typing import Optional
+
 
 class StressTestSimulator:
     def __init__(self):
@@ -15,7 +17,9 @@ class StressTestSimulator:
         self.lag_ms = 0
         self.noise_intensity = 0
 
-    def configure(self, drop_rate: float = 0.0, lag_ms: int = 0, noise_intensity: int = 0):
+    def configure(
+        self, drop_rate: float = 0.0, lag_ms: int = 0, noise_intensity: int = 0
+    ):
         self.drop_rate = drop_rate
         self.lag_ms = lag_ms
         self.noise_intensity = noise_intensity
@@ -34,7 +38,9 @@ class StressTestSimulator:
 
         # 3. Heavy Noise
         if self.noise_intensity > 0:
-            gauss = np.random.normal(0, self.noise_intensity, frame.shape).astype(np.uint8)
+            gauss = np.random.normal(0, self.noise_intensity, frame.shape).astype(
+                np.uint8
+            )
             frame = cv2.add(frame, gauss)
 
         return frame

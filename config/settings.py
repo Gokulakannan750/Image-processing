@@ -4,6 +4,7 @@ config/settings.py
 Central configuration for the Image_Processing system.
 Edit the values here rather than hunting through individual modules.
 """
+
 from dataclasses import dataclass, field
 
 

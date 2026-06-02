@@ -11,6 +11,7 @@ Exposes:
 
 Runs in a daemon thread; does not block the main vision loop.
 """
+
 import threading
 import time
 from collections import deque
@@ -101,8 +102,11 @@ class DashboardState:
                 "latency_ms": round(self.latency_ms, 1),
                 "steering": round(self.steering, 2),
                 "has_target": self.has_target,
-                "target_distance_m": round(self.target_distance_m, 2)
-                    if self.target_distance_m is not None else None,
+                "target_distance_m": (
+                    round(self.target_distance_m, 2)
+                    if self.target_distance_m is not None
+                    else None
+                ),
                 "obstacle_count": len(self.obstacles),
                 "has_critical_obstacle": self.has_critical_obstacle,
                 "obstacles": [
@@ -121,8 +125,11 @@ class DashboardState:
         """Return a Prometheus text-format metrics payload."""
         with self._lock:
             state_val = {
-                "IDLE": 0, "DRIVING": 1, "TURNING": 2,
-                "RECOVERING": 3, "STOPPED": 4,
+                "IDLE": 0,
+                "DRIVING": 1,
+                "TURNING": 2,
+                "RECOVERING": 3,
+                "STOPPED": 4,
             }.get(self.vehicle_state, -1)
             lines = [
                 "# HELP agribot_fps Current camera processing FPS",
@@ -188,9 +195,7 @@ class DashboardState:
         with self._lock:
             if self._frame is None:
                 return None
-            ok, buf = cv2.imencode(
-                ".jpg", self._frame, [cv2.IMWRITE_JPEG_QUALITY, 70]
-            )
+            ok, buf = cv2.imencode(".jpg", self._frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
             return buf.tobytes() if ok else None
 
 
@@ -199,6 +204,7 @@ dashboard_state = DashboardState()
 
 
 # ── Flask routes ───────────────────────────────────────────────────────────
+
 
 @app.route("/")
 def index() -> str:
@@ -241,20 +247,22 @@ def _mjpeg_generator() -> Generator[bytes, None, None]:
     while True:
         jpeg = dashboard_state.get_frame_jpeg()
         if jpeg:
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
-            )
+            yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
         time.sleep(0.033)  # ~30 fps cap on the stream
 
 
 # ── Server lifecycle ───────────────────────────────────────────────────────
 
+
 def start(host: str = "0.0.0.0", port: int = 5000) -> None:
     """Start the Flask server in a background daemon thread."""
+
     def _run() -> None:
         import logging as _logging
-        _logging.getLogger("werkzeug").setLevel(_logging.ERROR)  # suppress Flask access logs
+
+        _logging.getLogger("werkzeug").setLevel(
+            _logging.ERROR
+        )  # suppress Flask access logs
         app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
     t = threading.Thread(target=_run, name="dashboard-server", daemon=True)

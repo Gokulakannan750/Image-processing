@@ -1,9 +1,10 @@
 """
 vision/frame_pipeline.py
 ========================
-Coordinates preprocessing, execution of the detector registry, 
+Coordinates preprocessing, execution of the detector registry,
 performance monitoring, and postprocessing.
 """
+
 from typing import Tuple
 import cv2
 import numpy as np
@@ -19,13 +20,14 @@ from utils.logger import get_logger
 
 log = get_logger(__name__)
 
+
 class FramePipeline:
     def __init__(self, registry: DetectorRegistry):
         self.registry = registry
         self.perf_monitor = PerformanceMonitor()
         self.normalizer = LightingNormalizer()
         self.stability_analyzer = PoseStabilityAnalyzer()
-        
+
         # Determine test mode from config
         mode_str = config_manager.get("testing.active_mode", "NORMAL")
         try:
@@ -43,10 +45,10 @@ class FramePipeline:
 
         # 1. Simulate environmental conditions (if enabled)
         processed_frame = EnvironmentSimulator.apply_mode(frame.copy(), self.test_mode)
-        
+
         # 2. Apply Lighting Normalization
         processed_frame = self.normalizer.process(processed_frame)
-        
+
         # 3. Execute Detectors
         if not self.registry.is_empty():
             annotated_frame, result = self.registry.process_all(processed_frame)
@@ -60,13 +62,20 @@ class FramePipeline:
 
         # 5. UI Overlays
         self.perf_monitor.draw_overlay(annotated_frame)
-        
+
         if config_manager.get("testing.draw_mode_overlay", True):
             EnvironmentSimulator.draw_overlay(annotated_frame, self.test_mode)
-            
+
         if config_manager.get("validation.enable_stability_overlay", True):
             color = (0, 255, 0) if stability_score > 0.8 else (0, 165, 255)
-            cv2.putText(annotated_frame, f"STABILITY: {stability_score:.1%}", 
-                        (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            cv2.putText(
+                annotated_frame,
+                f"STABILITY: {stability_score:.1%}",
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                color,
+                2,
+            )
 
         return annotated_frame, result

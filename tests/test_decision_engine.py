@@ -3,7 +3,7 @@ tests/test_decision_engine.py
 Tests for DecisionEngine: obstacle blocking, turn trigger, steering correction,
 recovery transitions, and stop/resume behaviour.
 """
-import pytest
+
 
 from controllers.command_queue import CommandQueue
 from detectors.base_detector import DetectionResult, DetectionTarget, ObstacleDetection
@@ -47,6 +47,7 @@ def make_obstacle(is_critical=True) -> ObstacleDetection:
 
 # ── Obstacle blocking ────────────────────────────────────────────────────────
 
+
 def test_critical_obstacle_stops_vehicle():
     engine = make_engine()
     result = DetectionResult(obstacles=[make_obstacle(is_critical=True)])
@@ -78,12 +79,15 @@ def test_obstacle_clear_resumes_driving():
 
 # ── Turn trigger ─────────────────────────────────────────────────────────────
 
+
 def test_turn_trigger_queues_u_turn():
     q = CommandQueue()
     engine = DecisionEngine(q)
     engine.state_machine.min_duration_s = 0.0
 
-    result = DetectionResult(targets=[make_target(is_turn_trigger=True, distance_m=1.0)])
+    result = DetectionResult(
+        targets=[make_target(is_turn_trigger=True, distance_m=1.0)]
+    )
     engine.process_detection(result)
 
     # The state machine transitions inside process_detection before returning;
@@ -111,6 +115,7 @@ def test_turn_not_triggered_when_obstacle_present():
 
 # ── Steering correction ──────────────────────────────────────────────────────
 
+
 def test_centered_target_produces_small_steering():
     engine = make_engine()
     # center_x == camera center (1280/2 = 640) → raw error = 0
@@ -130,6 +135,7 @@ def test_off_center_target_produces_nonzero_steering():
 
 # ── Empty result ─────────────────────────────────────────────────────────────
 
+
 def test_no_target_does_not_crash():
     engine = make_engine()
     result = DetectionResult()
@@ -139,6 +145,7 @@ def test_no_target_does_not_crash():
 
 
 # ── confirm_turn_complete ─────────────────────────────────────────────────────
+
 
 def test_confirm_turn_complete_returns_to_driving():
     engine = make_engine()

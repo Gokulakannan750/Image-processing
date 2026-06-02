@@ -4,6 +4,7 @@ utils/logger.py
 Structured logging architecture with rotating files.
 Outputs separate logs for debug trace, runtime events, navigation, and safety.
 """
+
 import logging
 import logging.handlers
 import os
@@ -59,15 +60,16 @@ def setup_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
     # Runtime & Debug logs (all modules)
     add_file_handler("runtime.log", logging.INFO, 5, 5)
     add_file_handler("debug.log", logging.DEBUG, 10, 3)
-    
+
     # Specific specialized logs
     if "navigation" in name or "controller" in name:
         add_file_handler("navigation.log", logging.INFO, 5, 5)
-        
+
     if "safety" in name or "camera" in name:
         add_file_handler("safety.log", logging.INFO, 5, 5)
 
     return logger
+
 
 def get_logger(name: str) -> logging.Logger:
     return setup_logger(name, level=logging.INFO)

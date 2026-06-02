@@ -10,6 +10,7 @@ Recovery is ONLY triggered when:
 Normal driving without any markers in view is perfectly valid and
 never triggers recovery.
 """
+
 import time
 from typing import Optional
 from navigation.vehicle_state import VehicleStateMachine, State
@@ -18,10 +19,13 @@ from utils.logger import get_logger
 
 log = get_logger(__name__)
 
+
 class RecoveryManager:
     def __init__(self, state_machine: VehicleStateMachine) -> None:
         self.state_machine = state_machine
-        self.recovery_timeout_s: float = config_manager.get("navigation.recovery_timeout_s", 2.0)
+        self.recovery_timeout_s: float = config_manager.get(
+            "navigation.recovery_timeout_s", 2.0
+        )
         self.lost_time: Optional[float] = None
         self._was_tracking_trigger: bool = False
 
@@ -59,17 +63,23 @@ class RecoveryManager:
         elapsed = time.time() - self.lost_time
 
         if current_state == State.DRIVING:
-            self.state_machine.transition_to(State.RECOVERING, "Turn-trigger marker lost")
+            self.state_machine.transition_to(
+                State.RECOVERING, "Turn-trigger marker lost"
+            )
 
         elif current_state == State.RECOVERING:
             if elapsed > self.recovery_timeout_s:
-                self.state_machine.transition_to(State.STOPPED, "Recovery timeout exceeded")
+                self.state_machine.transition_to(
+                    State.STOPPED, "Recovery timeout exceeded"
+                )
 
         return self.state_machine.current_state
 
     def reload_config(self) -> None:
         """Re-read tunable parameters from config. Called by ConfigManager on hot-reload."""
-        self.recovery_timeout_s = config_manager.get("navigation.recovery_timeout_s", 2.0)
+        self.recovery_timeout_s = config_manager.get(
+            "navigation.recovery_timeout_s", 2.0
+        )
 
     def reset(self) -> None:
         """Reset after a successful turn or after STOPPED → resume scanning."""

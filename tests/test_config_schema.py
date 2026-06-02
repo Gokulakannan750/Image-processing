@@ -2,15 +2,20 @@
 tests/test_config_schema.py
 Tests for the pydantic AppConfig schema: defaults, validation errors, and edge cases.
 """
+
 import pytest
 from pydantic import ValidationError
 from config.schema import (
-    AppConfig, CameraConfig, YoloConfig, ControllerConfig,
-    NormalizationConfig, NavigationConfig,
+    AppConfig,
+    CameraConfig,
+    YoloConfig,
+    ControllerConfig,
+    NormalizationConfig,
+    NavigationConfig,
 )
 
-
 # ── Defaults ──────────────────────────────────────────────────────────────────
+
 
 def test_default_config_is_valid():
     cfg = AppConfig()
@@ -23,22 +28,24 @@ def test_default_config_is_valid():
 def test_partial_override_fills_defaults():
     cfg = AppConfig(camera={"fps": 60})
     assert cfg.camera.fps == 60
-    assert cfg.camera.width == 1280   # default preserved
+    assert cfg.camera.width == 1280  # default preserved
 
 
 # ── Camera validation ─────────────────────────────────────────────────────────
 
+
 def test_camera_fps_out_of_range_raises():
     with pytest.raises(ValidationError):
-        CameraConfig(fps=0)   # ge=1
+        CameraConfig(fps=0)  # ge=1
 
 
 def test_camera_negative_width_raises():
     with pytest.raises(ValidationError):
-        CameraConfig(width=0)   # ge=64
+        CameraConfig(width=0)  # ge=64
 
 
 # ── YOLO validation ───────────────────────────────────────────────────────────
+
 
 def test_yolo_confidence_out_of_range():
     with pytest.raises(ValidationError):
@@ -47,7 +54,7 @@ def test_yolo_confidence_out_of_range():
 
 def test_yolo_invalid_device():
     with pytest.raises(ValidationError):
-        YoloConfig(device="tpu")   # not in allowed set
+        YoloConfig(device="tpu")  # not in allowed set
 
 
 def test_yolo_cuda_device_with_index_allowed():
@@ -57,9 +64,10 @@ def test_yolo_cuda_device_with_index_allowed():
 
 # ── CAN data validation ───────────────────────────────────────────────────────
 
+
 def test_can_data_wrong_length_raises():
     with pytest.raises(ValidationError):
-        ControllerConfig(estop_command_data=[1, 2, 3])   # must be 8 bytes
+        ControllerConfig(estop_command_data=[1, 2, 3])  # must be 8 bytes
 
 
 def test_can_data_byte_out_of_range_raises():
@@ -69,9 +77,10 @@ def test_can_data_byte_out_of_range_raises():
 
 # ── Normalization method ──────────────────────────────────────────────────────
 
+
 def test_invalid_normalization_method_raises():
     with pytest.raises(ValidationError):
-        NormalizationConfig(method="HISTOGRAM")   # not in allowed set
+        NormalizationConfig(method="HISTOGRAM")  # not in allowed set
 
 
 def test_normalization_method_case_insensitive():
@@ -81,12 +90,14 @@ def test_normalization_method_case_insensitive():
 
 # ── Navigation ────────────────────────────────────────────────────────────────
 
+
 def test_smoothing_alpha_out_of_range_raises():
     with pytest.raises(ValidationError):
         NavigationConfig(smoothing_alpha=1.5)
 
 
 # ── Extra fields allowed ──────────────────────────────────────────────────────
+
 
 def test_unknown_top_level_key_allowed():
     cfg = AppConfig(**{"custom_field": "hello"})

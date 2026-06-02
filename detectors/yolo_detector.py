@@ -7,6 +7,7 @@ Runs inference in a background thread so the ArUco/barcode pipeline
 is never blocked. The main thread always gets the most recently
 completed inference result with zero added latency to the critical path.
 """
+
 import threading
 import time
 from typing import List, Optional, Tuple
@@ -54,9 +55,11 @@ class YoloDetector(BaseDetector):
         self._class_names: dict = {}
         self._filter_classes: Optional[list] = None
         self._conf = config_manager.get("detectors.yolo.confidence", 0.50)
-        self._danger_ratio = config_manager.get("detectors.yolo.danger_zone_ratio", 0.12)
+        self._danger_ratio = config_manager.get(
+            "detectors.yolo.danger_zone_ratio", 0.12
+        )
         self._device = config_manager.get("detectors.yolo.device", "cpu")
-        self._faulted = False          # True → inference disabled, return empty results
+        self._faulted = False  # True → inference disabled, return empty results
         self._consecutive_errors = 0
 
         try:
@@ -75,7 +78,11 @@ class YoloDetector(BaseDetector):
         try:
             self._model = YOLO(model_path)
         except Exception as exc:
-            log.error("Failed to load YOLO model '%s': %s — obstacle detection disabled.", model_path, exc)
+            log.error(
+                "Failed to load YOLO model '%s': %s — obstacle detection disabled.",
+                model_path,
+                exc,
+            )
             self._faulted = True
             self._start_dummy_thread()
             return
@@ -85,13 +92,18 @@ class YoloDetector(BaseDetector):
         if hasattr(self._model, "names") and self._model.names:
             self._class_names = self._model.names
             self._filter_classes = None
-            log.info("Custom model loaded with %d classes: %s",
-                     len(self._class_names), list(self._class_names.values()))
+            log.info(
+                "Custom model loaded with %d classes: %s",
+                len(self._class_names),
+                list(self._class_names.values()),
+            )
         else:
             self._class_names = _OBSTACLE_CLASSES
             self._filter_classes = list(_OBSTACLE_CLASSES.keys())
-            log.info("Using pretrained COCO model — filtering to %d obstacle classes.",
-                     len(self._filter_classes))
+            log.info(
+                "Using pretrained COCO model — filtering to %d obstacle classes.",
+                len(self._filter_classes),
+            )
 
         # Warm-up pass so the first real frame isn't slow
         try:
@@ -152,7 +164,9 @@ class YoloDetector(BaseDetector):
                 self._consecutive_errors += 1
                 log.error(
                     "YOLO inference error (%d/%d): %s",
-                    self._consecutive_errors, self._MAX_CONSECUTIVE_ERRORS, exc,
+                    self._consecutive_errors,
+                    self._MAX_CONSECUTIVE_ERRORS,
+                    exc,
                 )
                 if self._consecutive_errors >= self._MAX_CONSECUTIVE_ERRORS:
                     log.critical(
@@ -164,6 +178,8 @@ class YoloDetector(BaseDetector):
                     self._running = False
 
     def _run_inference(self, frame: np.ndarray) -> List[ObstacleDetection]:
+        if self._model is None:
+            return []
         h, w = frame.shape[:2]
         frame_area = max(h * w, 1)
 
@@ -225,7 +241,9 @@ class YoloDetector(BaseDetector):
     # Drawing helpers
     # ------------------------------------------------------------------
 
-    def _draw_obstacles(self, frame: np.ndarray, obstacles: List[ObstacleDetection]) -> None:
+    def _draw_obstacles(
+        self, frame: np.ndarray, obstacles: List[ObstacleDetection]
+    ) -> None:
         for obs in obstacles:
             x1, y1, x2, y2 = obs.bbox
             color = (0, 0, 255) if obs.is_critical else (0, 140, 255)
@@ -235,12 +253,26 @@ class YoloDetector(BaseDetector):
             label = f"{obs.label} {obs.confidence:.0%}"
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
             cv2.rectangle(frame, (x1, y1 - th - 6), (x1 + tw + 4, y1), color, -1)
-            cv2.putText(frame, label, (x1 + 2, y1 - 4),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+            cv2.putText(
+                frame,
+                label,
+                (x1 + 2, y1 - 4),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 255, 255),
+                1,
+            )
 
             if obs.is_critical:
-                cv2.putText(frame, "STOP", (x1, y2 + 18),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+                cv2.putText(
+                    frame,
+                    "STOP",
+                    (x1, y2 + 18),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65,
+                    (0, 0, 255),
+                    2,
+                )
 
     # ------------------------------------------------------------------
     # Lifecycle

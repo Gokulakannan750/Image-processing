@@ -4,10 +4,11 @@ config/schema.py
 Pydantic schema for default.yaml.  Validated on every config load.
 Unknown top-level keys are allowed (extra='allow') so user extensions don't break.
 """
+
 from __future__ import annotations
 
-from typing import Any, List, Optional, Union
-from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import List, Optional, Union
+from pydantic import BaseModel, Field, field_validator
 
 
 class CameraConfig(BaseModel):
@@ -60,7 +61,9 @@ class YoloConfig(BaseModel):
     def valid_device(cls, v: str) -> str:
         allowed = {"cpu", "cuda", "mps"}
         if v not in allowed and not v.startswith("cuda:"):
-            raise ValueError(f"device must be one of {allowed} or 'cuda:<N>', got '{v}'")
+            raise ValueError(
+                f"device must be one of {allowed} or 'cuda:<N>', got '{v}'"
+            )
         return v
 
 
@@ -148,7 +151,9 @@ class NormalizationConfig(BaseModel):
     @classmethod
     def valid_grid(cls, v: List[int]) -> List[int]:
         if len(v) != 2 or any(x <= 0 for x in v):
-            raise ValueError("clahe_grid_size must be [rows, cols] with positive values")
+            raise ValueError(
+                "clahe_grid_size must be [rows, cols] with positive values"
+            )
         return v
 
 
@@ -177,6 +182,7 @@ class DebugConfig(BaseModel):
 
 class AppConfig(BaseModel):
     """Root configuration schema."""
+
     model_config = {"extra": "allow"}
 
     robot_id: str = "robot-0"

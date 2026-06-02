@@ -3,6 +3,7 @@ tests/test_dashboard_api.py
 Tests for dashboard Flask API routes: /status, /logs, /metrics/history, /metrics.
 Uses Flask test client — no real server needed.
 """
+
 import json
 import pytest
 from dashboard.server import app, dashboard_state
@@ -36,6 +37,7 @@ def reset_state():
 
 # ── /status ───────────────────────────────────────────────────────────────────
 
+
 def test_status_returns_200(client):
     r = client.get("/status")
     assert r.status_code == 200
@@ -44,9 +46,19 @@ def test_status_returns_200(client):
 def test_status_contains_expected_keys(client):
     r = client.get("/status")
     data = json.loads(r.data)
-    for key in ("state", "fps", "latency_ms", "steering", "has_target",
-                "obstacle_count", "has_critical_obstacle", "obstacles",
-                "uptime_s", "robot_id", "yolo_faulted"):
+    for key in (
+        "state",
+        "fps",
+        "latency_ms",
+        "steering",
+        "has_target",
+        "obstacle_count",
+        "has_critical_obstacle",
+        "obstacles",
+        "uptime_s",
+        "robot_id",
+        "yolo_faulted",
+    ):
         assert key in data, f"Missing key: {key}"
 
 
@@ -75,6 +87,7 @@ def test_status_yolo_faulted_flag(client):
 
 # ── /logs ─────────────────────────────────────────────────────────────────────
 
+
 def test_logs_returns_list(client):
     r = client.get("/logs")
     data = json.loads(r.data)
@@ -90,6 +103,7 @@ def test_logs_contain_pushed_entries(client):
 
 # ── /metrics/history ──────────────────────────────────────────────────────────
 
+
 def test_history_returns_three_series(client):
     r = client.get("/metrics/history")
     data = json.loads(r.data)
@@ -97,10 +111,15 @@ def test_history_returns_three_series(client):
 
 
 def test_history_grows_after_update(client):
-    import numpy as np
     dashboard_state.update(
-        frame=None, vehicle_state="DRIVING", fps=25.0, latency_ms=20.0,
-        steering=1.2, obstacles=[], has_target=True, target_distance_m=1.5,
+        frame=None,
+        vehicle_state="DRIVING",
+        fps=25.0,
+        latency_ms=20.0,
+        steering=1.2,
+        obstacles=[],
+        has_target=True,
+        target_distance_m=1.5,
     )
     r = client.get("/metrics/history")
     data = json.loads(r.data)
@@ -109,6 +128,7 @@ def test_history_grows_after_update(client):
 
 
 # ── /metrics (Prometheus) ─────────────────────────────────────────────────────
+
 
 def test_prometheus_endpoint_returns_200(client):
     r = client.get("/metrics")
@@ -123,6 +143,11 @@ def test_prometheus_content_type(client):
 def test_prometheus_contains_key_metrics(client):
     r = client.get("/metrics")
     body = r.data.decode()
-    for metric in ("agribot_fps", "agribot_latency_ms", "agribot_vehicle_state",
-                   "agribot_estop_total", "agribot_yolo_faulted"):
+    for metric in (
+        "agribot_fps",
+        "agribot_latency_ms",
+        "agribot_vehicle_state",
+        "agribot_estop_total",
+        "agribot_yolo_faulted",
+    ):
         assert metric in body, f"Missing metric: {metric}"

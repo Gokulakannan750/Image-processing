@@ -4,6 +4,7 @@ safety/safety_monitor.py
 Monitors the robotics pipeline for critical failures (e.g. stale frames).
 Triggers Emergency Stops via the CommandQueue.
 """
+
 import time
 from typing import Optional
 
@@ -14,15 +15,19 @@ from utils.exceptions import SafetyViolationError
 
 log = get_logger(__name__)
 
+
 class SafetyMonitor:
     """
     Independent monitor that ensures the system is running safely.
     Checks frame timestamps and triggers E-STOP if the camera dies.
     """
+
     def __init__(self, command_queue: CommandQueue):
         self.command_queue = command_queue
         self.max_stale_ms = config_manager.get("safety.max_stale_frame_ms", 1500)
-        self._auto_recovery: bool = config_manager.get("safety.enable_auto_recovery", True)
+        self._auto_recovery: bool = config_manager.get(
+            "safety.enable_auto_recovery", True
+        )
         self.last_frame_time: Optional[float] = None
         self._e_stop_triggered = False
 
@@ -44,12 +49,14 @@ class SafetyMonitor:
             return  # Already stopped
 
         now = time.time()
-        
+
         # Check camera staleness
         if self.last_frame_time is not None:
             stale_ms = (now - self.last_frame_time) * 1000
             if stale_ms > self.max_stale_ms:
-                self.trigger_e_stop(f"Stale frame detected: {stale_ms:.1f}ms without a new frame.")
+                self.trigger_e_stop(
+                    f"Stale frame detected: {stale_ms:.1f}ms without a new frame."
+                )
 
     def trigger_e_stop(self, reason: str) -> None:
         """Injects an E_STOP command with CRITICAL priority.
@@ -65,15 +72,17 @@ class SafetyMonitor:
                 priority=CommandPriority.CRITICAL,
                 timestamp=time.time(),
                 command_type="E_STOP",
-                payload={"reason": reason}
+                payload={"reason": reason},
             )
             self.command_queue.push(cmd)
             self._e_stop_triggered = True
 
             if not self._auto_recovery:
                 raise SafetyViolationError(f"Emergency Stop Triggered: {reason}")
-            log.warning("Auto-recovery is ON — holding E-STOP, waiting for camera to resume.")
-            
+            log.warning(
+                "Auto-recovery is ON — holding E-STOP, waiting for camera to resume."
+            )
+
     def reload_config(self) -> None:
         """Re-read tunable parameters from config. Called by ConfigManager on hot-reload."""
         self.max_stale_ms = config_manager.get("safety.max_stale_frame_ms", 1500)

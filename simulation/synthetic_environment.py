@@ -10,6 +10,7 @@ The marker pixel size is derived from:
 This ensures the ArUco detector's solvePnP pose estimate matches the
 simulated distance, so turn-trigger logic fires at the correct threshold.
 """
+
 import time
 
 import cv2
@@ -99,8 +100,20 @@ class SyntheticEnvironment:
 
         # Crop row lines converging toward horizon
         mid = self.width // 2
-        cv2.line(frame, (mid - 300, self.height), (mid - 40, self.height // 2), (50, 80, 35), 4)
-        cv2.line(frame, (mid + 300, self.height), (mid + 40, self.height // 2), (50, 80, 35), 4)
+        cv2.line(
+            frame,
+            (mid - 300, self.height),
+            (mid - 40, self.height // 2),
+            (50, 80, 35),
+            4,
+        )
+        cv2.line(
+            frame,
+            (mid + 300, self.height),
+            (mid + 40, self.height // 2),
+            (50, 80, 35),
+            4,
+        )
 
         # Resize and place the real ArUco marker
         marker_bgr = cv2.cvtColor(
@@ -116,12 +129,17 @@ class SyntheticEnvironment:
             frame[y1:y2, x1:x2] = marker_bgr
 
         # Distance HUD
-        trigger_color = (0, 80, 255) if self._dist_m <= self._trigger_dist_m else (180, 180, 180)
+        trigger_color = (
+            (0, 80, 255) if self._dist_m <= self._trigger_dist_m else (180, 180, 180)
+        )
         cv2.putText(
             frame,
             f"SIM DIST: {self._dist_m:.2f} m  |  TRIGGER: {self._trigger_dist_m:.1f} m",
             (10, self.height - 15),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.65, trigger_color, 2,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            trigger_color,
+            2,
         )
 
         return frame

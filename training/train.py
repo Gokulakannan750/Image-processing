@@ -16,16 +16,18 @@ Usage:
     python training/train.py
     python training/train.py --epochs 100 --batch 8 --device cuda
 """
+
 import argparse
-import os
 import sys
 from pathlib import Path
 
 
 def validate_dataset(dataset_path: str) -> bool:
     required = [
-        "images/train", "images/val",
-        "labels/train", "labels/val",
+        "images/train",
+        "images/val",
+        "labels/train",
+        "labels/val",
     ]
     missing = [r for r in required if not Path(dataset_path, r).exists()]
     if missing:
@@ -37,8 +39,9 @@ def validate_dataset(dataset_path: str) -> bool:
         print("  2. Label images in Roboflow → export as YOLOv8")
         print("  3. Place exported dataset in training/dataset/")
         return False
-    train_imgs = list(Path(dataset_path, "images/train").glob("*.jpg")) + \
-                 list(Path(dataset_path, "images/train").glob("*.png"))
+    train_imgs = list(Path(dataset_path, "images/train").glob("*.jpg")) + list(
+        Path(dataset_path, "images/train").glob("*.png")
+    )
     if len(train_imgs) < 10:
         print(f"\nWARNING: Only {len(train_imgs)} training images found.")
         print("Aim for at least 50 images per class for reliable detection.")
@@ -48,14 +51,37 @@ def validate_dataset(dataset_path: str) -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train custom farm obstacle YOLOv8 model")
-    parser.add_argument("--epochs",  type=int,   default=50,                       help="Training epochs (default 50)")
-    parser.add_argument("--batch",   type=int,   default=16,                       help="Batch size (default 16; reduce to 8 if OOM)")
-    parser.add_argument("--device",  type=str,   default="cpu",                    help="'cpu', 'cuda', or '0' for first GPU")
-    parser.add_argument("--model",   type=str,   default="yolov8n.pt",             help="Base model to fine-tune")
-    parser.add_argument("--data",    type=str,   default="training/farm_obstacles.yaml", help="Dataset YAML config")
-    parser.add_argument("--name",    type=str,   default="farm_obstacles",         help="Run name (saved in runs/detect/)")
-    parser.add_argument("--imgsz",   type=int,   default=640,                      help="Input image size")
+    parser = argparse.ArgumentParser(
+        description="Train custom farm obstacle YOLOv8 model"
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=50, help="Training epochs (default 50)"
+    )
+    parser.add_argument(
+        "--batch",
+        type=int,
+        default=16,
+        help="Batch size (default 16; reduce to 8 if OOM)",
+    )
+    parser.add_argument(
+        "--device", type=str, default="cpu", help="'cpu', 'cuda', or '0' for first GPU"
+    )
+    parser.add_argument(
+        "--model", type=str, default="yolov8n.pt", help="Base model to fine-tune"
+    )
+    parser.add_argument(
+        "--data",
+        type=str,
+        default="training/farm_obstacles.yaml",
+        help="Dataset YAML config",
+    )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default="farm_obstacles",
+        help="Run name (saved in runs/detect/)",
+    )
+    parser.add_argument("--imgsz", type=int, default=640, help="Input image size")
     args = parser.parse_args()
 
     try:
@@ -78,16 +104,16 @@ def main():
 
     print("\nStarting training...\n")
     model = YOLO(args.model)
-    results = model.train(
+    model.train(
         data=args.data,
         epochs=args.epochs,
         batch=args.batch,
         device=args.device,
         imgsz=args.imgsz,
         name=args.name,
-        patience=15,           # early stopping
-        augment=True,          # random flips, crops, colour jitter
-        degrees=10.0,          # rotation augmentation for tilted camera
+        patience=15,  # early stopping
+        augment=True,  # random flips, crops, colour jitter
+        degrees=10.0,  # rotation augmentation for tilted camera
         translate=0.1,
         scale=0.5,
         fliplr=0.5,
@@ -97,13 +123,13 @@ def main():
     )
 
     best_weights = Path("runs/detect") / args.name / "weights/best.pt"
-    print(f"\n=== Training complete ===")
+    print("\n=== Training complete ===")
     print(f"Best weights saved to: {best_weights}")
-    print(f"\nTo use your custom model, update config/default.yaml:")
-    print(f"  detectors:")
-    print(f"    yolo:")
-    print(f"      model: \"{best_weights}\"")
-    print(f"      classes:  # leave empty to use all classes in the model")
+    print("\nTo use your custom model, update config/default.yaml:")
+    print("  detectors:")
+    print("    yolo:")
+    print(f'      model: "{best_weights}"')
+    print("      classes:  # leave empty to use all classes in the model")
 
 
 if __name__ == "__main__":

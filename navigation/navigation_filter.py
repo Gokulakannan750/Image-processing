@@ -3,14 +3,17 @@ navigation/navigation_filter.py
 ===============================
 Smooths steering and alignment commands.
 """
+
 from config.config_manager import config_manager
 from vision.pose_filter import PoseFilter
+
 
 class NavigationFilter:
     """
     Applies deadbands and smoothing to steering angles and cross-track errors
     to prevent jittery navigation.
     """
+
     def __init__(self) -> None:
         alpha = config_manager.get("navigation.smoothing_alpha", 0.3)
         self.steering_filter = PoseFilter(alpha=alpha)
@@ -27,7 +30,7 @@ class NavigationFilter:
             smoothed = self.distance_filter.update(0.0)
         else:
             smoothed = self.distance_filter.update(cross_track_pixel_error)
-            
+
         return smoothed
 
     def reload_config(self) -> None:

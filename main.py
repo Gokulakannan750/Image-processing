@@ -5,6 +5,7 @@ High-performance robotics entry point.
 Integrates threaded camera streams, dynamic detector registry,
 decision engine, safety monitoring, and command queue execution.
 """
+
 import argparse
 import signal
 import sys
@@ -20,34 +21,56 @@ from utils.exceptions import RoboticsBaseError
 # Setup structured logger before importing components that log during init
 log = setup_logger("main")
 
-from camera.camera_stream import CameraStream
-from controllers.command_queue import CommandQueue
-from controllers.machine_controller import MachineController
-from detectors.detector_registry import build_detectors_from_config
-from navigation.decision_engine import DecisionEngine
-from navigation.command_visualizer import CommandVisualizer
-from navigation.vehicle_state import State
-from safety.safety_monitor import SafetyMonitor
-from vision.frame_pipeline import FramePipeline
-from recording.data_recorder import DataRecorder
-from recording.replay_system import ReplayCameraStream
-from simulation.synthetic_environment import SyntheticEnvironment
-from testing.stress_test import StressTestSimulator
-from testing.report_generator import ReportGenerator
-from dashboard.server import dashboard_state
-import dashboard.server as dashboard_server
+from camera.camera_stream import CameraStream  # noqa: E402
+from controllers.command_queue import CommandQueue  # noqa: E402
+from controllers.machine_controller import MachineController  # noqa: E402
+from detectors.detector_registry import build_detectors_from_config  # noqa: E402
+from navigation.decision_engine import DecisionEngine  # noqa: E402
+from navigation.command_visualizer import CommandVisualizer  # noqa: E402
+from navigation.vehicle_state import State  # noqa: E402
+from safety.safety_monitor import SafetyMonitor  # noqa: E402
+from vision.frame_pipeline import FramePipeline  # noqa: E402
+from recording.data_recorder import DataRecorder  # noqa: E402
+from recording.replay_system import ReplayCameraStream  # noqa: E402
+from simulation.synthetic_environment import SyntheticEnvironment  # noqa: E402
+from testing.stress_test import StressTestSimulator  # noqa: E402
+from testing.report_generator import ReportGenerator  # noqa: E402
+from dashboard.server import dashboard_state  # noqa: E402
+import dashboard.server as dashboard_server  # noqa: E402
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Professional Agricultural Robotics Stack")
-    parser.add_argument("--config",   type=str,   default=None, help="Path to custom YAML config file")
-    parser.add_argument("--replay",   type=str,   default=None, help="Path to a recorded session directory")
-    parser.add_argument("--simulate", action="store_true",      help="Run in synthetic simulation mode")
-    parser.add_argument("--stress",   action="store_true",      help="Run in STRESS TEST mode")
-    parser.add_argument("--speed",     type=float, default=1.0,  help="Replay playback speed multiplier (e.g. 2.0 = 2x)")
-    parser.add_argument("--robot-id",  type=str,   default=None, help="Robot ID override (overrides config robot_id)")
-    parser.add_argument("--max-queue-depth", type=int, default=2,
-                        help="Max vision frames queued before dropping stale ones (frame-skip)")
+    parser = argparse.ArgumentParser(
+        description="Professional Agricultural Robotics Stack"
+    )
+    parser.add_argument(
+        "--config", type=str, default=None, help="Path to custom YAML config file"
+    )
+    parser.add_argument(
+        "--replay", type=str, default=None, help="Path to a recorded session directory"
+    )
+    parser.add_argument(
+        "--simulate", action="store_true", help="Run in synthetic simulation mode"
+    )
+    parser.add_argument("--stress", action="store_true", help="Run in STRESS TEST mode")
+    parser.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        help="Replay playback speed multiplier (e.g. 2.0 = 2x)",
+    )
+    parser.add_argument(
+        "--robot-id",
+        type=str,
+        default=None,
+        help="Robot ID override (overrides config robot_id)",
+    )
+    parser.add_argument(
+        "--max-queue-depth",
+        type=int,
+        default=2,
+        help="Max vision frames queued before dropping stale ones (frame-skip)",
+    )
     return parser.parse_args()
 
 
@@ -69,7 +92,10 @@ def main() -> None:
     config_manager.start_watch(interval_s=2.0)
 
     def _reload_config(signum: int, frame: object) -> None:  # noqa: ARG001
-        log.info("SIGHUP received — reloading configuration from %s", config_manager.config_path)
+        log.info(
+            "SIGHUP received — reloading configuration from %s",
+            config_manager.config_path,
+        )
         config_manager.load()
 
     if hasattr(signal, "SIGHUP"):
@@ -156,7 +182,9 @@ def main() -> None:
                 # frame is silently dropped, keeping only the freshest frame.
                 _frame_queue.append(frame)
                 if len(_frame_queue) == _max_depth:
-                    log.debug("Frame queue full — dropping stale frame (processing lag).")
+                    log.debug(
+                        "Frame queue full — dropping stale frame (processing lag)."
+                    )
                 frame = _frame_queue.pop()
 
                 safety_monitor.notify_frame_received()
@@ -167,7 +195,9 @@ def main() -> None:
                 vision_pipeline.perf_monitor.record_latency(result.frame_latency_ms)
 
                 # Navigation Decisions
-                current_state, steering_correction = decision_engine.process_detection(result)
+                current_state, steering_correction = decision_engine.process_detection(
+                    result
+                )
 
                 # Draw Visualizers
                 primary = result.primary_target
@@ -175,7 +205,11 @@ def main() -> None:
                     annotated_frame,
                     current_state,
                     steering_correction,
-                    target_center=(primary.center_x, primary.center_y) if primary else (None, None),
+                    target_center=(
+                        (primary.center_x, primary.center_y)
+                        if primary
+                        else (None, None)
+                    ),
                     obstacles=result.obstacles,
                 )
 
@@ -199,19 +233,27 @@ def main() -> None:
                 cv2.imshow("Robotics Vision Output", annotated_frame)
 
                 # Recording
-                recorder.record(frame, annotated_frame, result, {
-                    "has_targets": result.has_targets,
-                    "target_id": primary.id if primary else None,
-                    "state": current_state.name,
-                    "steering_correction": steering_correction
-                })
+                recorder.record(
+                    frame,
+                    annotated_frame,
+                    result,
+                    {
+                        "has_targets": result.has_targets,
+                        "target_id": primary.id if primary else None,
+                        "state": current_state.name,
+                        "steering_correction": steering_correction,
+                    },
+                )
 
                 if cv2.waitKey(30) & 0xFF == ord("q"):
                     log.info("Quit command received.")
                     break
 
                 # Only reset recovery for marker-loss stops, not obstacle stops
-                if current_state == State.STOPPED and not decision_engine._obstacle_blocked:
+                if (
+                    current_state == State.STOPPED
+                    and not decision_engine._obstacle_blocked
+                ):
                     decision_engine.recovery_manager.reset()
 
     except RoboticsBaseError as e:

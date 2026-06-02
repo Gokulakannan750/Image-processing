@@ -3,8 +3,8 @@ tests/test_frame_pipeline.py
 Tests for FramePipeline: empty-frame guard, normalizer runs, result type,
 stability score is in [0,1], and overlay annotations are drawn.
 """
+
 import numpy as np
-import pytest
 
 from detectors.detector_registry import DetectorRegistry
 from detectors.base_detector import DetectionResult
@@ -28,6 +28,7 @@ def grey_frame(h=480, w=640, val=128) -> np.ndarray:
 
 # ── Empty frame guard ─────────────────────────────────────────────────────────
 
+
 def test_none_frame_returns_empty_result():
     pipeline = make_pipeline()
     annotated, result = pipeline.process(None)
@@ -45,6 +46,7 @@ def test_zero_size_frame_returns_empty_result():
 
 
 # ── Normal frame ──────────────────────────────────────────────────────────────
+
 
 def test_normal_frame_returns_ndarray():
     pipeline = make_pipeline()
@@ -69,6 +71,7 @@ def test_stability_score_in_valid_range():
 
 # ── Performance monitor ticks ─────────────────────────────────────────────────
 
+
 def test_fps_increases_after_multiple_frames():
     pipeline = make_pipeline()
     for _ in range(10):
@@ -78,6 +81,7 @@ def test_fps_increases_after_multiple_frames():
 
 
 # ── No detectors → still returns valid annotated frame ───────────────────────
+
 
 def test_empty_registry_still_annotates():
     pipeline = make_pipeline(DetectorRegistry())

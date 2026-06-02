@@ -4,17 +4,20 @@ controllers/command_queue.py
 Priority queue for hardware commands.
 Decouples navigation decisions from hardware execution.
 """
+
 import time
 import queue
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any, Dict
 
+
 class CommandPriority(IntEnum):
-    CRITICAL = 0   # E-STOP, Safety Overrides
-    HIGH = 1       # Alignment corrections
-    NORMAL = 2     # U-Turns
-    LOW = 3        # Informational / Status queries
+    CRITICAL = 0  # E-STOP, Safety Overrides
+    HIGH = 1  # Alignment corrections
+    NORMAL = 2  # U-Turns
+    LOW = 3  # Informational / Status queries
+
 
 @dataclass(order=True)
 class HardwareCommand:
@@ -22,10 +25,11 @@ class HardwareCommand:
     timestamp: float = field(compare=False)
     command_type: str = field(compare=False)
     payload: Dict[str, Any] = field(default_factory=dict, compare=False)
-    
+
     def __post_init__(self) -> None:
         if self.timestamp == 0.0:
             self.timestamp = time.time()
+
 
 class CommandQueue:
     """Thread-safe priority queue for hardware commands."""

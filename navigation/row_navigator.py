@@ -3,6 +3,7 @@ navigation/row_navigator.py
 ============================
 Tracks row-level state for the autonomous field traversal mission.
 """
+
 from enum import Enum, auto
 from typing import Optional
 
@@ -13,6 +14,7 @@ log = get_logger(__name__)
 
 class NavigationCommand(Enum):
     """Commands returned to the DecisionEngine by :class:`RowNavigator`."""
+
     CONTINUE = auto()
     """Keep moving forward — no action needed."""
 

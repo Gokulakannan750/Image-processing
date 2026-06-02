@@ -1,4 +1,5 @@
 """detectors package — computer vision marker detectors."""
+
 from .base_detector import BaseDetector, DetectionTarget, DetectionResult
 from .aruco_detector import ArucoDetector
 from .barcode_detector import BarcodeDetector
@@ -13,5 +14,5 @@ __all__ = [
     "BarcodeDetector",
     "FeatureDetector",
     "DetectorRegistry",
-    "build_detectors_from_config"
+    "build_detectors_from_config",
 ]

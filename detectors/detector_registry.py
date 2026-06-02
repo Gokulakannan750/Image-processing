@@ -3,6 +3,7 @@ detectors/detector_registry.py
 ==============================
 Dynamic registry for computer vision detectors.
 """
+
 from typing import Dict, Tuple
 import numpy as np
 
@@ -11,6 +12,7 @@ from utils.logger import get_logger
 from config.config_manager import config_manager
 
 log = get_logger(__name__)
+
 
 class DetectorRegistry:
     def __init__(self):

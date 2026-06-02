@@ -3,7 +3,7 @@ navigation/decision_engine.py
 ==============================
 Processes detection results and issues navigation commands.
 """
-import time
+
 from typing import Tuple
 from config.config_manager import config_manager
 from controllers.command_queue import CommandQueue, HardwareCommand, CommandPriority
@@ -14,6 +14,7 @@ from navigation.navigation_filter import NavigationFilter
 from utils.logger import get_logger
 
 log = get_logger(__name__)
+
 
 class DecisionEngine:
     def __init__(self, command_queue: CommandQueue):
@@ -63,7 +64,9 @@ class DecisionEngine:
                 steering_correction = self.nav_filter.process_alignment(raw_error)
 
             if primary.is_turn_trigger:
-                if self.state_machine.transition_to(State.TURNING, f"Marker {primary.id} reached"):
+                if self.state_machine.transition_to(
+                    State.TURNING, f"Marker {primary.id} reached"
+                ):
                     self._issue_u_turn_command(primary.id)
 
         elif current_state == State.STOPPED:
@@ -77,7 +80,7 @@ class DecisionEngine:
             priority=CommandPriority.NORMAL,
             timestamp=0.0,
             command_type="U_TURN",
-            payload={"row_info": row_info, "robot_id": robot_id}
+            payload={"row_info": row_info, "robot_id": robot_id},
         )
         if self.command_queue.push(cmd):
             log.info("Queued U_TURN command for %s (robot=%s)", row_info, robot_id)
@@ -88,7 +91,7 @@ class DecisionEngine:
             priority=CommandPriority.CRITICAL,
             timestamp=0.0,
             command_type="E_STOP",
-            payload={"reason": "Recovery timeout exceeded", "robot_id": robot_id}
+            payload={"reason": "Recovery timeout exceeded", "robot_id": robot_id},
         )
         self.command_queue.push(cmd)
 

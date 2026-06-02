@@ -28,6 +28,7 @@ Aim for 50-100 images per class from different:
     - angles     (straight, left, right)
     - lighting   (morning sun, overcast, midday shadow)
 """
+
 import argparse
 import os
 import time
@@ -49,16 +50,21 @@ DEFAULT_CLASSES = [
 def main():
     parser = argparse.ArgumentParser(description="Training data collector")
     parser.add_argument(
-        "--output", default="training/dataset/images/raw",
-        help="Root folder to save captured frames (default: training/dataset/images/raw)"
+        "--output",
+        default="training/dataset/images/raw",
+        help="Root folder to save captured frames (default: training/dataset/images/raw)",
     )
     parser.add_argument(
-        "--class", dest="cls", default=None,
-        help="Starting obstacle class (e.g. rock, tractor). Creates a sub-folder."
+        "--class",
+        dest="cls",
+        default=None,
+        help="Starting obstacle class (e.g. rock, tractor). Creates a sub-folder.",
     )
     parser.add_argument(
-        "--interval", type=float, default=2.0,
-        help="Seconds between auto-captures (default 2.0)"
+        "--interval",
+        type=float,
+        default=2.0,
+        help="Seconds between auto-captures (default 2.0)",
     )
     args = parser.parse_args()
 
@@ -71,7 +77,9 @@ def main():
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(f"ERROR: Could not open camera source: {source}")
-        print("Tip: Try running  python tools/find_camera.py  to find your camera index.")
+        print(
+            "Tip: Try running  python tools/find_camera.py  to find your camera index."
+        )
         return
 
     # Active class state
@@ -102,27 +110,61 @@ def main():
         cv2.rectangle(display, (0, 0), (w, 50), (30, 30, 30), -1)
 
         mode_text = f"AUTO ({args.interval}s)" if auto_mode else "MANUAL"
-        cv2.putText(display, f"Class: [{active_idx+1}] {active_class.upper()}",
-                    (10, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 120), 2)
-        cv2.putText(display, f"Mode: {mode_text}  |  Saved: {saved_counts[active_class]}",
-                    (w // 2 - 20, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (200, 200, 200), 1)
+        cv2.putText(
+            display,
+            f"Class: [{active_idx+1}] {active_class.upper()}",
+            (10, 32),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.85,
+            (0, 255, 120),
+            2,
+        )
+        cv2.putText(
+            display,
+            f"Mode: {mode_text}  |  Saved: {saved_counts[active_class]}",
+            (w // 2 - 20, 32),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (200, 200, 200),
+            1,
+        )
 
         # Class selector list on the right
         for i, cls in enumerate(classes):
             color = (0, 255, 120) if i == active_idx else (140, 140, 140)
-            cv2.putText(display, f"[{i+1}] {cls}  ({saved_counts[cls]})",
-                        (w - 220, 75 + i * 26),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 1)
+            cv2.putText(
+                display,
+                f"[{i+1}] {cls}  ({saved_counts[cls]})",
+                (w - 220, 75 + i * 26),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                color,
+                1,
+            )
 
         # Bottom hint
-        cv2.putText(display, "SPACE=save  A=auto  1-7=class  Q=quit",
-                    (10, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+        cv2.putText(
+            display,
+            "SPACE=save  A=auto  1-7=class  Q=quit",
+            (10, h - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (180, 180, 180),
+            1,
+        )
 
         # Auto-capture countdown
         if auto_mode:
             remaining = max(0.0, args.interval - (time.time() - last_auto))
-            cv2.putText(display, f"Next: {remaining:.1f}s",
-                        (10, h - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 200, 255), 2)
+            cv2.putText(
+                display,
+                f"Next: {remaining:.1f}s",
+                (10, h - 35),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.65,
+                (0, 200, 255),
+                2,
+            )
 
         cv2.imshow("Training Data Collector", display)
         key = cv2.waitKey(30) & 0xFF
@@ -136,7 +178,9 @@ def main():
         elif key == ord("a"):
             auto_mode = not auto_mode
             last_auto = time.time()
-            print(f"Auto-capture {'ON' if auto_mode else 'OFF'} for class: {active_class}")
+            print(
+                f"Auto-capture {'ON' if auto_mode else 'OFF'} for class: {active_class}"
+            )
         elif ord("1") <= key <= ord(str(min(len(classes), 9))):
             active_idx = key - ord("1")
             active_class = classes[active_idx]
@@ -150,12 +194,16 @@ def main():
             # Save into a per-class sub-folder
             class_dir = os.path.join(args.output, active_class)
             os.makedirs(class_dir, exist_ok=True)
-            fname = os.path.join(class_dir, f"{active_class}_{int(time.time()*1000)}.jpg")
+            fname = os.path.join(
+                class_dir, f"{active_class}_{int(time.time()*1000)}.jpg"
+            )
             cv2.imwrite(fname, frame)
             saved_counts[active_class] += 1
             total = sum(saved_counts.values())
-            print(f"  [{active_class}] saved {saved_counts[active_class]}  "
-                  f"(total: {total})  →  {fname}")
+            print(
+                f"  [{active_class}] saved {saved_counts[active_class]}  "
+                f"(total: {total})  →  {fname}"
+            )
 
     cap.release()
     cv2.destroyAllWindows()
