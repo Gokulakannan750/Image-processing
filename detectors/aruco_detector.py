@@ -4,7 +4,7 @@ detectors/aruco_detector.py
 Classical CV detector using ArUco fiducial markers.
 """
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import cv2
 import cv2.aruco as aruco
@@ -42,7 +42,7 @@ class ArucoDetector(BaseDetector):
         "DICT_ARUCO_ORIGINAL": aruco.DICT_ARUCO_ORIGINAL,
     }
 
-    def __init__(self, dict_type: int = None) -> None:
+    def __init__(self, dict_type: Optional[int] = None) -> None:
         # Load dictionary from config or use provided default
         dict_name = config_manager.get("detectors.aruco.dictionary", "DICT_4X4_50")
 
@@ -133,14 +133,14 @@ class ArucoDetector(BaseDetector):
         if ids is not None:
             if scale != 1.0:
                 for i in range(len(ids)):
-                    corners[i] = corners[i] / scale
+                    corners[i] = corners[i] / scale  # type: ignore[index]
 
             aruco.drawDetectedMarkers(frame, corners, ids)
             blur_score = estimate_blur(gray)
 
             for i in range(len(ids)):
                 try:
-                    rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
+                    rvec, tvec, _ = aruco.estimatePoseSingleMarkers(  # type: ignore[call-overload]
                         corners[i],
                         self.marker_length,
                         self.camera_matrix,

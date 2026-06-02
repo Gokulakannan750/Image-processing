@@ -31,8 +31,12 @@ class ArucoConfig(BaseModel):
     show_rejected: bool = False
     marker_length_m: float = Field(0.20, gt=0)
     turn_trigger_distance_m: float = Field(1.5, gt=0)
-    camera_matrix: List[List[float]] = [[800, 0, 640], [0, 800, 360], [0, 0, 1]]
-    dist_coeffs: List[List[float]] = [[0, 0, 0, 0]]
+    camera_matrix: List[List[float]] = Field(
+        default_factory=lambda: [[800.0, 0.0, 640.0], [0.0, 800.0, 360.0], [0.0, 0.0, 1.0]]
+    )
+    dist_coeffs: List[List[float]] = Field(
+        default_factory=lambda: [[0.0, 0.0, 0.0, 0.0]]
+    )
 
 
 class BarcodeConfig(BaseModel):
@@ -69,10 +73,10 @@ class YoloConfig(BaseModel):
 
 class DetectorsConfig(BaseModel):
     model_config = {"extra": "allow"}
-    aruco: ArucoConfig = ArucoConfig()
-    barcode: BarcodeConfig = BarcodeConfig()
-    feature: FeatureConfig = FeatureConfig()
-    yolo: YoloConfig = YoloConfig()
+    aruco: ArucoConfig = Field(default_factory=ArucoConfig)
+    barcode: BarcodeConfig = Field(default_factory=BarcodeConfig)
+    feature: FeatureConfig = Field(default_factory=FeatureConfig)
+    yolo: YoloConfig = Field(default_factory=YoloConfig)
 
 
 class NavigationConfig(BaseModel):
@@ -92,9 +96,13 @@ class ControllerConfig(BaseModel):
     can_channel: str = "can0"
     can_bitrate: int = Field(500000, gt=0)
     turn_command_id: int = Field(0x123, ge=0, le=0x7FF)
-    turn_command_data: List[int] = [1, 0, 0, 0, 0, 0, 0, 0]
+    turn_command_data: List[int] = Field(
+        default_factory=lambda: [1, 0, 0, 0, 0, 0, 0, 0]
+    )
     estop_command_id: int = Field(0, ge=0, le=0x7FF)
-    estop_command_data: List[int] = [255, 255, 0, 0, 0, 0, 0, 0]
+    estop_command_data: List[int] = Field(
+        default_factory=lambda: [255, 255, 0, 0, 0, 0, 0, 0]
+    )
 
     @field_validator("turn_command_data", "estop_command_data")
     @classmethod
@@ -136,7 +144,7 @@ class NormalizationConfig(BaseModel):
     enabled: bool = True
     method: str = "CLAHE"
     clahe_clip_limit: float = Field(2.0, gt=0)
-    clahe_grid_size: List[int] = [8, 8]
+    clahe_grid_size: List[int] = Field(default_factory=lambda: [8, 8])
     gamma_correction: float = Field(1.2, gt=0)
 
     @field_validator("method")
@@ -186,14 +194,14 @@ class AppConfig(BaseModel):
     model_config = {"extra": "allow"}
 
     robot_id: str = "robot-0"
-    camera: CameraConfig = CameraConfig()
-    detectors: DetectorsConfig = DetectorsConfig()
-    navigation: NavigationConfig = NavigationConfig()
-    controller: ControllerConfig = ControllerConfig()
-    safety: SafetyConfig = SafetyConfig()
-    recording: RecordingConfig = RecordingConfig()
-    validation: ValidationConfig = ValidationConfig()
-    normalization: NormalizationConfig = NormalizationConfig()
-    testing: TestingConfig = TestingConfig()
-    dashboard: DashboardConfig = DashboardConfig()
-    debug: DebugConfig = DebugConfig()
+    camera: CameraConfig = Field(default_factory=CameraConfig)
+    detectors: DetectorsConfig = Field(default_factory=DetectorsConfig)
+    navigation: NavigationConfig = Field(default_factory=NavigationConfig)
+    controller: ControllerConfig = Field(default_factory=ControllerConfig)
+    safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    recording: RecordingConfig = Field(default_factory=RecordingConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
+    normalization: NormalizationConfig = Field(default_factory=NormalizationConfig)
+    testing: TestingConfig = Field(default_factory=TestingConfig)
+    dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
+    debug: DebugConfig = Field(default_factory=DebugConfig)

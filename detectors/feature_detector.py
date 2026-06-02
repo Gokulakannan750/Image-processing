@@ -20,7 +20,7 @@ log = get_logger(__name__)
 
 class FeatureDetector(BaseDetector):
     def __init__(self, target_image_path: str) -> None:
-        self.orb = cv2.ORB_create()
+        self.orb = cv2.ORB_create()  # type: ignore[attr-defined]
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
         self.min_matches = config_manager.get("detectors.feature.min_matches", 15)
@@ -66,9 +66,9 @@ class FeatureDetector(BaseDetector):
             # Estimate center based on matched keypoints
             center_x, center_y = None, None
             if is_turn:
-                pts = np.float32([kp[m.trainIdx].pt for m in good_matches]).reshape(
-                    -1, 2
-                )
+                pts = np.float32(
+                    [kp[m.trainIdx].pt for m in good_matches]  # type: ignore[arg-type]
+                ).reshape(-1, 2)
                 center_x = float(np.mean(pts[:, 0]))
                 center_y = float(np.mean(pts[:, 1]))
 

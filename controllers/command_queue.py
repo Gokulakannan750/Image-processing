@@ -9,7 +9,7 @@ import time
 import queue
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 class CommandPriority(IntEnum):
@@ -45,7 +45,7 @@ class CommandQueue:
         except queue.Full:
             return False
 
-    def pop(self, timeout: float = None) -> "HardwareCommand | None":
+    def pop(self, timeout: Optional[float] = None) -> "HardwareCommand | None":
         """Pops the highest priority command from the queue. Blocks up to timeout seconds."""
         try:
             return self._queue.get(block=timeout is not None, timeout=timeout)

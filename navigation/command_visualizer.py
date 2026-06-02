@@ -119,7 +119,7 @@ class CommandVisualizer:
                 4,
                 tipLength=0.2,
             )
-            if tx is not None:
+            if tx is not None and ty is not None:
                 error_color = (
                     (0, 255, 0)
                     if abs(tx - center_line_x) < dead_zone_w

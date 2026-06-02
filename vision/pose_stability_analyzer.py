@@ -86,10 +86,10 @@ class PoseStabilityAnalyzer:
         dist_score = max(0, 1.0 - (dist_cv / 0.1))
         yaw_score = max(0, 1.0 - (avg_yaw_jitter / 5.0))
 
-        return (dist_score * 0.6) + (yaw_score * 0.4)
+        return float((dist_score * 0.6) + (yaw_score * 0.4))
 
     def get_stability_report(self, marker_id: str) -> Dict[str, float]:
-        hist = self.history.get(marker_id, [])
+        hist = list(self.history.get(marker_id, []))
         if not hist:
             return {}
 

@@ -193,7 +193,9 @@ class YoloDetector(BaseDetector):
 
         obstacles: List[ObstacleDetection] = []
         for res in results:
-            for box in res.boxes:
+            if res.boxes is None:
+                continue
+            for box in res.boxes:  # type: ignore[union-attr,attr-defined]
                 cls_id = int(box.cls[0])
                 if cls_id not in self._class_names:
                     continue

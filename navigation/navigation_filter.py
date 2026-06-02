@@ -22,7 +22,7 @@ class NavigationFilter:
 
     def process_steering(self, raw_steering_angle: float) -> float:
         """Smooths raw steering angle."""
-        return self.steering_filter.update(raw_steering_angle)
+        return float(self.steering_filter.update(raw_steering_angle))
 
     def process_alignment(self, cross_track_pixel_error: float) -> float:
         """Applies deadzone and smoothing to cross track error."""
@@ -30,8 +30,7 @@ class NavigationFilter:
             smoothed = self.distance_filter.update(0.0)
         else:
             smoothed = self.distance_filter.update(cross_track_pixel_error)
-
-        return smoothed
+        return float(smoothed)
 
     def reload_config(self) -> None:
         """Re-read tunable parameters from config. Called by ConfigManager on hot-reload."""
