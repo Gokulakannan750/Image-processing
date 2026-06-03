@@ -154,30 +154,31 @@ class Marker:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  BUILD MARKERS  — placed on the RIGHT SIDE POLE of each path
+#  BUILD MARKERS  — placed in the MIDDLE of each path at the headland end
 # ─────────────────────────────────────────────────────────────────────────────
 def build_markers():
     """
-    Markers are mounted on the POLE to the RIGHT of each machine path,
-    at the headland (top or bottom) end of the field.
+    Markers stand on a pole at the END of each machine path (top or bottom
+    headland), centred on the MIDDLE of the path — directly ahead of the
+    machine as it drives up/down that path.
 
     Path traversal order:
-      Path 0 UP   → NORMAL marker on right pole at TOP
-      Path 1 DOWN → NORMAL marker on right pole at BOTTOM
-      Path 2 UP   → NORMAL marker on right pole at TOP
-      Path 3 DOWN → NORMAL marker on right pole at BOTTOM
-      Path 4 UP   → LAST-ROW marker on right pole at TOP  (final U-turn here)
-      Path 5 DOWN → STOP marker on right pole at BOTTOM   (field complete)
+      Path 0 UP   → NORMAL marker at TOP of path 0
+      Path 1 DOWN → NORMAL marker at BOTTOM of path 1
+      Path 2 UP   → NORMAL marker at TOP of path 2
+      Path 3 DOWN → NORMAL marker at BOTTOM of path 3
+      Path 4 UP   → LAST-ROW marker at TOP of path 4  (final U-turn here)
+      Path 5 DOWN → STOP marker at BOTTOM of path 5   (field complete)
     """
     markers = []
 
-    # Top-end markers (paths going UP: 0, 2, 4)
+    # Top-end markers (paths going UP: 0, 2, 4) — centred on the path
     for i, kind in [(0, "normal"), (2, "normal"), (4, "last_row")]:
-        markers.append(Marker(POLE_X[i], FIELD_TOP_Y, kind))
+        markers.append(Marker(PATH_CX[i], FIELD_TOP_Y, kind))
 
-    # Bottom-end markers (paths going DOWN: 1, 3, 5)
+    # Bottom-end markers (paths going DOWN: 1, 3, 5) — centred on the path
     for i, kind in [(1, "normal"), (3, "normal"), (5, "stop")]:
-        markers.append(Marker(POLE_X[i], FIELD_BOT_Y, kind))
+        markers.append(Marker(PATH_CX[i], FIELD_BOT_Y, kind))
 
     return markers
 
@@ -247,7 +248,7 @@ class FieldSimulator:
     def _target_marker(self):
         """Find the marker the machine is currently heading toward."""
         target_y = FIELD_TOP_Y if self.going_up else FIELD_BOT_Y
-        target_x = POLE_X[self.path_idx]  # RIGHT pole of current path
+        target_x = PATH_CX[self.path_idx]  # centred on the current path
         for mk in self.markers:
             if (
                 abs(mk.x - target_x) < 8
@@ -702,7 +703,7 @@ class FieldSimulator:
         div()
 
         # Marker info — show each marker and its current state
-        title("Markers (on side poles)", C_DIM, 0.48)
+        title("Markers (path ends)", C_DIM, 0.48)
         for mk in self.markers:
             pos_lbl = "TOP" if mk.y < WIN_H // 2 else "BOT"
             state_c = {
