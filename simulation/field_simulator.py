@@ -38,6 +38,7 @@ import cv2
 import numpy as np
 import math
 import time
+import random
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  LAYOUT CONSTANTS
@@ -278,9 +279,23 @@ class FieldSimulator:
         self.cam_state = "idle"
         self.marker_seen_name = "-"
 
+        # Side distance sensors (lane-keeping)
+        self._drift_v = 0.0  # simulated lateral disturbance velocity
+        self.left_dist = PATH_W / 2.0  # distance from left sensor to left plants
+        self.right_dist = PATH_W / 2.0  # distance from right sensor to right plants
+        self.steer_hint = "CENTRED"  # "STEER LEFT" | "STEER RIGHT" | "CENTRED"
+
         # Timing
         self.start_time = time.time()
         self.done_time = None
+
+    # ── path edges (where the crop plants are, for the side sensors) ─────────
+
+    def _path_edges(self, path_idx):
+        """Return (left_plant_x, right_plant_x) for the given path."""
+        left_plant = FIELD_X0 + CROP_W + path_idx * STRIP
+        right_plant = left_plant + PATH_W
+        return left_plant, right_plant
 
     # ── geometry ────────────────────────────────────────────────────────────
 
@@ -447,7 +462,7 @@ class FieldSimulator:
             self.cam_state = "idle"
             self.marker_seen_name = "-"
 
-        # Move — decelerate as the machine nears the headland
+        # Move forward — decelerate as the machine nears the headland
         spd = self.speed * (max(0.45, fwd / 180) if fwd < 180 else 1.0)
         if self.going_up:
             self.my -= spd
@@ -455,6 +470,35 @@ class FieldSimulator:
         else:
             self.my += spd
             self.angle = math.pi / 2
+
+        # ── Side distance sensors → keep the machine centred in the path ──
+        # A small random lateral disturbance (uneven ground) pushes the
+        # machine off-centre; the side sensors measure the gap to the plants
+        # on each side and steer back toward the middle.
+        self._drift_v += random.uniform(-0.05, 0.05)
+        self._drift_v = max(-0.7, min(0.7, self._drift_v))
+        self.mx += self._drift_v
+
+        left_plant, right_plant = self._path_edges(self.path_idx)
+        # Keep the body inside the path (sensors never pass the plants).
+        self.mx = max(left_plant + M_W / 2, min(self.mx, right_plant - M_W / 2))
+
+        # Sensor readings = clear gap from each side of the body to the plants.
+        self.left_dist = (self.mx - M_W / 2) - left_plant
+        self.right_dist = right_plant - (self.mx + M_W / 2)
+
+        # Controller: if one side is closer, steer a little toward the wider
+        # side so the machine re-centres (this is a nudge, NOT a turn).
+        diff = self.right_dist - self.left_dist  # +ve: more room on right
+        if abs(diff) > 2.0:
+            self.mx += 0.10 * diff  # nudge toward the side with more room
+            self.steer_hint = "STEER RIGHT" if diff > 0 else "STEER LEFT"
+        else:
+            self.steer_hint = "CENTRED"
+
+        # Recompute sensor readings after the centring nudge (for display).
+        self.left_dist = (self.mx - M_W / 2) - left_plant
+        self.right_dist = right_plant - (self.mx + M_W / 2)
 
     def _start_turn(self, mk):
         curves = self._build_turn_curve(
@@ -579,10 +623,13 @@ class FieldSimulator:
         cv2.addWeighted(ov, 0.22, c, 0.78, 0, c)
         cv2.polylines(c, [cone], True, col, 1)
 
-        # 11. Machine
+        # 11. Side distance sensors (lane-keeping)
+        self._draw_sensors(c)
+
+        # 12. Machine
         self._draw_machine(c)
 
-        # 12. Labels
+        # 13. Labels
         cv2.putText(
             c,
             "TOP OF FIELD (headland)",
@@ -726,6 +773,47 @@ class FieldSimulator:
         if mk.state == "triggered":
             cv2.circle(c, (cx, cy), TRIGGER_DIST, C_CAM_TRIG, 2)
 
+    def _draw_sensors(self, c):
+        """Draw the left/right distance sensors that keep the machine centred."""
+        if self.phase != "driving":
+            return
+        cy = int(self.my)
+        left_plant, right_plant = self._path_edges(self.path_idx)
+        body_l = int(self.mx - M_W / 2)
+        body_r = int(self.mx + M_W / 2)
+
+        # Sensor beam colour: green if that side has more room, amber if tight.
+        bal = self.right_dist - self.left_dist
+        left_col = (60, 200, 60) if bal >= 0 else (40, 170, 230)
+        right_col = (60, 200, 60) if bal <= 0 else (40, 170, 230)
+
+        # Left beam: from body left edge to the left plants.
+        cv2.line(c, (body_l, cy), (int(left_plant), cy), left_col, 2)
+        cv2.circle(c, (int(left_plant), cy), 3, left_col, -1)
+        # Right beam: from body right edge to the right plants.
+        cv2.line(c, (body_r, cy), (int(right_plant), cy), right_col, 2)
+        cv2.circle(c, (int(right_plant), cy), 3, right_col, -1)
+
+        # Distance labels.
+        cv2.putText(
+            c,
+            f"{self.left_dist:.0f}",
+            (int((body_l + left_plant) / 2) - 10, cy - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.36,
+            left_col,
+            1,
+        )
+        cv2.putText(
+            c,
+            f"{self.right_dist:.0f}",
+            (int((body_r + right_plant) / 2) - 8, cy - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.36,
+            right_col,
+            1,
+        )
+
     def _draw_machine(self, c):
         cx, cy = int(self.mx), int(self.my)
         a = self.angle
@@ -857,6 +945,14 @@ class FieldSimulator:
             )
         div()
 
+        # Side sensors (lane-keeping)
+        title("Side sensors (centring)", C_DIM, 0.48)
+        row("Left gap", f"{self.left_dist:.0f} px", C_WHITE)
+        row("Right gap", f"{self.right_dist:.0f} px", C_WHITE)
+        hint_col = C_YELLOW if self.steer_hint != "CENTRED" else C_GREEN
+        row("Action", self.steer_hint, hint_col)
+        div()
+
         # Marker info — show each marker and its current state
         title("Markers (path ends)", C_DIM, 0.48)
         for mk in self.markers:
@@ -961,80 +1057,9 @@ class FieldSimulator:
 # ─────────────────────────────────────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────────────────────────────────────
-CONTROLS_WIN = "Controls — drag sliders to adjust"
-
-
-def _noop(_):
-    pass
-
-
-def _build_controls_window():
-    """Create the Controls window with parameter trackbars."""
-    cv2.namedWindow(CONTROLS_WIN, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(CONTROLS_WIN, 430, 360)
-    # name, default, max
-    cv2.createTrackbar("Speed", CONTROLS_WIN, 3, 12, _noop)
-    cv2.createTrackbar("Paths", CONTROLS_WIN, NUM_PATHS, 14, _noop)
-    cv2.createTrackbar("Turn dist", CONTROLS_WIN, int(TRIGGER_DIST), 130, _noop)
-    cv2.createTrackbar("Camera range", CONTROLS_WIN, int(CAM_RANGE), 250, _noop)
-    cv2.createTrackbar("Camera FOV", CONTROLS_WIN, int(CAM_HALF_DEG), 85, _noop)
-    cv2.createTrackbar("Side angle", CONTROLS_WIN, int(SIDE_FACING_DEG), 85, _noop)
-    cv2.createTrackbar("Readable max", CONTROLS_WIN, int(READABLE_MAX_DEG), 89, _noop)
-    cv2.createTrackbar("Side mode", CONTROLS_WIN, 0, 1, _noop)
-    cv2.createTrackbar("Pause", CONTROLS_WIN, 0, 1, _noop)
-
-
-def _apply_controls(sim):
-    """Read the trackbars each frame and apply them to the simulator.
-
-    Structural changes (path count, side angle, marker mode) rebuild the
-    field; movement/detection params apply live without a rebuild.
-    """
-    global TRIGGER_DIST, CAM_RANGE, CAM_HALF_DEG, SIDE_FACING_DEG, READABLE_MAX_DEG
-
-    try:
-        speed_v = cv2.getTrackbarPos("Speed", CONTROLS_WIN)
-        paths_v = max(2, cv2.getTrackbarPos("Paths", CONTROLS_WIN))
-        trig_v = max(20, cv2.getTrackbarPos("Turn dist", CONTROLS_WIN))
-        range_v = max(60, cv2.getTrackbarPos("Camera range", CONTROLS_WIN))
-        fov_v = max(15, cv2.getTrackbarPos("Camera FOV", CONTROLS_WIN))
-        side_v = max(5, cv2.getTrackbarPos("Side angle", CONTROLS_WIN))
-        read_v = max(20, cv2.getTrackbarPos("Readable max", CONTROLS_WIN))
-        mode_v = cv2.getTrackbarPos("Side mode", CONTROLS_WIN)
-        pause_v = cv2.getTrackbarPos("Pause", CONTROLS_WIN)
-    except cv2.error:
-        return  # Controls window closed
-
-    # ── live params (no rebuild needed) ──────────────────────────────────
-    sim.speed = max(0.5, float(speed_v))
-    TRIGGER_DIST = trig_v
-    CAM_RANGE = range_v
-    CAM_HALF_DEG = fov_v
-    READABLE_MAX_DEG = read_v
-    sim.paused = bool(pause_v)
-
-    # ── structural params (rebuild the field when changed) ───────────────
-    want_mode = "side" if mode_v == 1 else "center"
-    need_reset = False
-    if paths_v != NUM_PATHS:
-        recompute_layout(paths_v)
-        need_reset = True
-    if side_v != SIDE_FACING_DEG:
-        SIDE_FACING_DEG = side_v
-        need_reset = True
-    if want_mode != sim.marker_mode:
-        sim.marker_mode = want_mode
-        need_reset = True
-    if need_reset:
-        keep_speed = sim.speed
-        sim.reset()
-        sim.speed = keep_speed
-
-
 def main():
     print("=" * 60)
     print("  AgriBot Field Simulator")
-    print("  A 'Controls' window lets you tune speed, paths, camera, etc.")
     print("  Keys:  SPACE=pause  M=marker mode  R=restart  +/-=speed  Q=quit")
     print("=" * 60)
 
@@ -1042,13 +1067,11 @@ def main():
     win = "AgriBot Field Simulator — Q to quit"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win, WIN_W, WIN_H)
-    _build_controls_window()
 
     frame_time = 1.0 / 60.0
 
     while True:
         t0 = time.time()
-        _apply_controls(sim)
         sim.update()
         cv2.imshow(win, sim.draw())
 
@@ -1056,20 +1079,21 @@ def main():
         if key in (ord("q"), ord("Q"), 27):
             break
         elif key in (ord(" "), ord("p"), ord("P")):
-            new = 0 if cv2.getTrackbarPos("Pause", CONTROLS_WIN) else 1
-            cv2.setTrackbarPos("Pause", CONTROLS_WIN, new)
+            sim.paused = not sim.paused
+            print("Paused" if sim.paused else "Resumed")
         elif key in (ord("r"), ord("R")):
             sim.reset()
-            print("↺ Restarted")
+            print("Restarted")
         elif key in (ord("m"), ord("M")):
-            new = 0 if cv2.getTrackbarPos("Side mode", CONTROLS_WIN) else 1
-            cv2.setTrackbarPos("Side mode", CONTROLS_WIN, new)
+            sim.marker_mode = "side" if sim.marker_mode == "center" else "center"
+            sim.reset()
+            print(f"Marker mode: {sim.marker_mode}")
         elif key in (ord("+"), ord("=")):
-            cur = cv2.getTrackbarPos("Speed", CONTROLS_WIN)
-            cv2.setTrackbarPos("Speed", CONTROLS_WIN, min(cur + 1, 12))
+            sim.speed = min(sim.speed + 0.5, 12.0)
+            print(f"Speed: {sim.speed:.1f}")
         elif key in (ord("-"), ord("_")):
-            cur = cv2.getTrackbarPos("Speed", CONTROLS_WIN)
-            cv2.setTrackbarPos("Speed", CONTROLS_WIN, max(cur - 1, 1))
+            sim.speed = max(sim.speed - 0.5, 0.5)
+            print(f"Speed: {sim.speed:.1f}")
 
         sleep = frame_time - (time.time() - t0)
         if sleep > 0:
