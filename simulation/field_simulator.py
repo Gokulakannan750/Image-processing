@@ -7,9 +7,15 @@ Top-down 2D visual simulation of the AgriBot field operation.
 Field layout matches the real field diagram:
   - Crop rows (green) separated by vertical pole lines
   - Machine travels in the paths BETWEEN the crop rows
-  - Markers are mounted on the SIDE POLES at the headland ends of each path
-    (NOT at the path centre — on the pole to the right of the machine path)
-  - Camera detects the side-pole marker as the machine approaches the headland
+  - Markers stand at the headland ends of each path
+
+Two marker placement modes (toggle live with the M key):
+  CENTRE mode  — marker centred on the middle of each path, facing straight
+                 down the path (head-on to the camera, 0° viewing angle)
+  SIDE mode    — marker mounted on the side pole, angled 45° toward the
+                 oncoming machine. A live "viewing angle / READABLE" readout
+                 shows the camera can still read it at 45° (ArUco tolerates
+                 up to ~65°; a perpendicular marker would be unreadable).
 
 Marker types:
   NORMAL   → U-turn, continue to next row
@@ -18,6 +24,7 @@ Marker types:
 
 Controls:
   SPACE / P  — pause / resume
+  M          — toggle marker placement (centre  <->  side, 45° angled)
   R          — restart from the beginning
   +  / =     — speed up
   -          — slow down
@@ -77,6 +84,12 @@ CAM_RANGE = 150  # camera cone length (px)
 # Animation
 BASE_SPEED = 2.2  # px/frame when driving
 
+# Marker placement mode + side-marker geometry
+SIDE_FACING_DEG = 45  # angle of side marker face away from the travel axis
+# Max viewing angle (between camera line-of-sight and marker face normal)
+# beyond which the marker can no longer be read. ArUco is the most tolerant.
+READABLE_MAX_DEG = 65  # ArUco practical limit (QR ~45, 1D barcode ~20)
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  COLOURS  (BGR)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,11 +147,14 @@ def bez_angle(P0, P1, P2, P3, t):
 #  MARKER
 # ─────────────────────────────────────────────────────────────────────────────
 class Marker:
-    def __init__(self, x, y, kind):
-        self.x = x  # centre x  — on the POLE (side of path)
+    def __init__(self, x, y, kind, facing_deg=None):
+        self.x = x  # centre x
         self.y = y  # centre y  — at FIELD_TOP_Y or FIELD_BOT_Y
         self.kind = kind  # 'normal' | 'last_row' | 'stop'
         self.state = "idle"  # 'idle' | 'detected' | 'triggered' | 'done'
+        # facing_deg: direction (screen atan2 degrees) the marker face points.
+        # None = the marker faces straight down the path (centred mode).
+        self.facing_deg = facing_deg
 
     def colour(self):
         if self.state == "done":
@@ -156,29 +172,50 @@ class Marker:
 # ─────────────────────────────────────────────────────────────────────────────
 #  BUILD MARKERS  — placed in the MIDDLE of each path at the headland end
 # ─────────────────────────────────────────────────────────────────────────────
-def build_markers():
+def build_markers(mode="center"):
     """
-    Markers stand on a pole at the END of each machine path (top or bottom
-    headland), centred on the MIDDLE of the path — directly ahead of the
-    machine as it drives up/down that path.
+    Build the six field markers.
 
-    Path traversal order:
-      Path 0 UP   → NORMAL marker at TOP of path 0
-      Path 1 DOWN → NORMAL marker at BOTTOM of path 1
-      Path 2 UP   → NORMAL marker at TOP of path 2
-      Path 3 DOWN → NORMAL marker at BOTTOM of path 3
-      Path 4 UP   → LAST-ROW marker at TOP of path 4  (final U-turn here)
-      Path 5 DOWN → STOP marker at BOTTOM of path 5   (field complete)
+    mode == "center":
+      Marker stands centred on the MIDDLE of each path at the headland end,
+      facing straight down the path — directly ahead of the machine.
+
+    mode == "side":
+      Marker is mounted on the SIDE pole (right boundary of the path) and
+      angled SIDE_FACING_DEG (45°) toward the oncoming machine, so the
+      forward-facing camera still sees its face as it approaches.
+
+    Path traversal order (same in both modes):
+      Path 0 UP   → NORMAL    at TOP of path 0
+      Path 1 DOWN → NORMAL    at BOTTOM of path 1
+      Path 2 UP   → NORMAL    at TOP of path 2
+      Path 3 DOWN → NORMAL    at BOTTOM of path 3
+      Path 4 UP   → LAST-ROW  at TOP of path 4   (final U-turn here)
+      Path 5 DOWN → STOP      at BOTTOM of path 5 (field complete)
     """
     markers = []
+    top_specs = [(0, "normal"), (2, "normal"), (4, "last_row")]
+    bot_specs = [(1, "normal"), (3, "normal"), (5, "stop")]
 
-    # Top-end markers (paths going UP: 0, 2, 4) — centred on the path
-    for i, kind in [(0, "normal"), (2, "normal"), (4, "last_row")]:
-        markers.append(Marker(PATH_CX[i], FIELD_TOP_Y, kind))
-
-    # Bottom-end markers (paths going DOWN: 1, 3, 5) — centred on the path
-    for i, kind in [(1, "normal"), (3, "normal"), (5, "stop")]:
-        markers.append(Marker(PATH_CX[i], FIELD_BOT_Y, kind))
+    if mode == "side":
+        # Side pole = right boundary of the path. Marker angled toward the
+        # path (left) and toward the oncoming machine.
+        # TOP markers: machine comes from below → face DOWN-LEFT (135°).
+        # BOTTOM markers: machine comes from above → face UP-LEFT (225°).
+        for i, kind in top_specs:
+            markers.append(
+                Marker(POLE_X[i], FIELD_TOP_Y, kind, facing_deg=90 + SIDE_FACING_DEG)
+            )
+        for i, kind in bot_specs:
+            markers.append(
+                Marker(POLE_X[i], FIELD_BOT_Y, kind, facing_deg=270 - SIDE_FACING_DEG)
+            )
+    else:
+        # Centred on path, facing straight down the path (no angle).
+        for i, kind in top_specs:
+            markers.append(Marker(PATH_CX[i], FIELD_TOP_Y, kind))
+        for i, kind in bot_specs:
+            markers.append(Marker(PATH_CX[i], FIELD_BOT_Y, kind))
 
     return markers
 
@@ -188,12 +225,14 @@ def build_markers():
 # ─────────────────────────────────────────────────────────────────────────────
 class FieldSimulator:
     def __init__(self):
+        self.marker_mode = "center"  # 'center' | 'side'
         self.reset()
 
     def reset(self):
-        self.markers = build_markers()
+        self.markers = build_markers(self.marker_mode)
         self.speed = BASE_SPEED
         self.paused = False
+        self.view_angle = None  # live viewing angle to the active side marker
 
         # Machine position & orientation
         self.mx = float(PATH_CX[0])
@@ -245,10 +284,36 @@ class FieldSimulator:
         diff = (angle_to - self.angle + math.pi) % (2 * math.pi) - math.pi
         return abs(diff) <= math.radians(CAM_HALF_DEG)
 
+    def _marker_view_angle(self, mk):
+        """
+        Angle (degrees) between the camera's line-of-sight to the marker and
+        the marker's face normal. 0° = camera dead in front of the face
+        (perfect read), 90° = edge-on (unreadable). For centred markers
+        (facing_deg is None) the marker always faces the machine → 0°.
+        """
+        if mk.facing_deg is None:
+            return 0.0
+        # Line of sight from marker toward the camera (machine).
+        los_x = self.mx - mk.x
+        los_y = self.my - mk.y
+        los_len = math.hypot(los_x, los_y)
+        if los_len < 1:
+            return 0.0
+        los_x /= los_len
+        los_y /= los_len
+        # Marker face normal.
+        n = math.radians(mk.facing_deg)
+        nx, ny = math.cos(n), math.sin(n)
+        dot = max(-1.0, min(1.0, los_x * nx + los_y * ny))
+        return math.degrees(math.acos(dot))
+
     def _target_marker(self):
         """Find the marker the machine is currently heading toward."""
         target_y = FIELD_TOP_Y if self.going_up else FIELD_BOT_Y
-        target_x = PATH_CX[self.path_idx]  # centred on the current path
+        if self.marker_mode == "side":
+            target_x = POLE_X[self.path_idx]  # right-side pole of the path
+        else:
+            target_x = PATH_CX[self.path_idx]  # centred on the path
         for mk in self.markers:
             if (
                 abs(mk.x - target_x) < 8
@@ -307,18 +372,34 @@ class FieldSimulator:
         else:
             fwd = FIELD_BOT_Y - self.my
 
-        # The marker is "seen" when it is inside the camera cone and within range.
+        # Viewing angle to the marker face (0° = head-on, 90° = edge-on).
+        # In side mode this varies with approach; in centre mode it is 0°.
+        if mk is not None and self._in_cone(mk) and eucl <= DETECT_DIST:
+            self.view_angle = self._marker_view_angle(mk)
+        else:
+            self.view_angle = None
+        readable = self.view_angle is None or self.view_angle <= READABLE_MAX_DEG
+
+        # The marker is "seen" only when it is in the cone, in range, AND its
+        # face is not too steep to read (this is the whole point of the demo:
+        # a 45° angled marker reads fine; a near-edge-on one would not).
         seen = (
             mk is not None
             and mk.state != "done"
             and self._in_cone(mk)
             and eucl <= DETECT_DIST
+            and readable
         )
+
+        def _readout(state_word):
+            if self.view_angle is not None:
+                return f"{mk.label()} {state_word} @ {self.view_angle:.0f}deg"
+            return f"{mk.label()} {state_word} (end {fwd:.0f}px)"
 
         if seen and fwd <= TRIGGER_DIST:
             mk.state = "triggered"
             self.cam_state = "triggered"
-            self.marker_seen_name = f"{mk.label()} (end {fwd:.0f}px)"
+            self.marker_seen_name = _readout("read")
             # STOP marker after the last-row turn → end the whole field
             if mk.kind == "stop":
                 mk.state = "done"
@@ -329,7 +410,16 @@ class FieldSimulator:
         elif seen:
             mk.state = "detected"
             self.cam_state = "detected"
-            self.marker_seen_name = f"{mk.label()} (end {fwd:.0f}px)"
+            self.marker_seen_name = _readout("seen")
+        elif (
+            mk is not None
+            and self._in_cone(mk)
+            and eucl <= DETECT_DIST
+            and not readable
+        ):
+            # In view but too steep to read — show the failure clearly.
+            self.cam_state = "idle"
+            self.marker_seen_name = f"{mk.label()} TOO STEEP {self.view_angle:.0f}deg"
         else:
             self.cam_state = "idle"
             self.marker_seen_name = "-"
@@ -541,28 +631,59 @@ class FieldSimulator:
                 -1,
             )
 
-        # ── Marker square (like ArUco / QR code) ──
-        cv2.rectangle(
-            c, (cx - MK_HALF, cy - MK_HALF), (cx + MK_HALF, cy + MK_HALF), col, -1
-        )
-        cv2.rectangle(
-            c, (cx - MK_HALF, cy - MK_HALF), (cx + MK_HALF, cy + MK_HALF), C_WHITE, 1
-        )
-        # Inner black pattern (ArUco-style)
-        inner = MK_HALF // 2
-        cv2.rectangle(
-            c, (cx - inner, cy - inner), (cx + inner, cy + inner), (20, 20, 20), -1
-        )
-        # White cells in inner pattern
-        q = inner // 2
-        for dx, dy in [(-q, -q), (q, q)]:
+        # ── Marker face (like ArUco / QR code) ──
+        if mk.facing_deg is None:
+            # Centred marker — axis-aligned square facing straight down the path.
+            cv2.rectangle(
+                c, (cx - MK_HALF, cy - MK_HALF), (cx + MK_HALF, cy + MK_HALF), col, -1
+            )
             cv2.rectangle(
                 c,
-                (cx + dx - q // 2, cy + dy - q // 2),
-                (cx + dx + q // 2, cy + dy + q // 2),
+                (cx - MK_HALF, cy - MK_HALF),
+                (cx + MK_HALF, cy + MK_HALF),
                 C_WHITE,
-                -1,
+                1,
             )
+            inner = MK_HALF // 2
+            cv2.rectangle(
+                c, (cx - inner, cy - inner), (cx + inner, cy + inner), (20, 20, 20), -1
+            )
+            q = inner // 2
+            for dx, dy in [(-q, -q), (q, q)]:
+                cv2.rectangle(
+                    c,
+                    (cx + dx - q // 2, cy + dy - q // 2),
+                    (cx + dx + q // 2, cy + dy + q // 2),
+                    C_WHITE,
+                    -1,
+                )
+        else:
+            # Angled side marker — draw the square rotated so its face points
+            # along facing_deg, appearing foreshortened (a parallelogram) from
+            # the top-down view, just like a real angled sign.
+            theta = math.radians(mk.facing_deg)
+            ct, st = math.cos(theta), math.sin(theta)
+            # Local square corners; squashed along the normal to fake perspective.
+            squash = 0.5
+            local = [
+                (-MK_HALF * squash, -MK_HALF),
+                (MK_HALF * squash, -MK_HALF),
+                (MK_HALF * squash, MK_HALF),
+                (-MK_HALF * squash, MK_HALF),
+            ]
+            pts = []
+            for lx, ly in local:
+                rx = lx * ct - ly * st + cx
+                ry = lx * st + ly * ct + cy
+                pts.append((int(rx), int(ry)))
+            poly = np.array(pts, dtype=np.int32)
+            cv2.fillPoly(c, [poly], col)
+            cv2.polylines(c, [poly], True, C_WHITE, 1)
+            cv2.circle(c, (cx, cy), 3, (20, 20, 20), -1)
+            # Facing-direction arrow (shows which way the marker looks).
+            ax = int(cx + ct * (MK_HALF + 12))
+            ay = int(cy + st * (MK_HALF + 12))
+            cv2.arrowedLine(c, (cx, cy), (ax, ay), C_WHITE, 1, tipLength=0.4)
 
         # ── Label ──
         label = mk.label()
@@ -698,8 +819,19 @@ class FieldSimulator:
         ccol = {"idle": C_DIM, "detected": C_GREEN, "triggered": C_RED}.get(
             self.cam_state, C_DIM
         )
+        mode_lbl = (
+            "SIDE (45deg angled)" if self.marker_mode == "side" else "CENTRE of path"
+        )
+        row("Marker mode", mode_lbl, (0, 200, 200))
         row("Camera state", self.cam_state.upper(), ccol)
         row("Marker in view", self.marker_seen_name, ccol)
+        if self.view_angle is not None:
+            ok = self.view_angle <= READABLE_MAX_DEG
+            row(
+                "View angle",
+                f"{self.view_angle:.0f}deg  {'READABLE' if ok else 'TOO STEEP'}",
+                C_GREEN if ok else C_RED,
+            )
         div()
 
         # Marker info — show each marker and its current state
@@ -755,6 +887,7 @@ class FieldSimulator:
         title("Controls", C_DIM, 0.48)
         for key, desc in [
             ("SPACE", "Pause / Resume"),
+            ("M", "Marker mode: centre/side"),
             ("R", "Restart"),
             ("+ / -", "Speed up/down"),
             ("Q", "Quit"),
@@ -833,6 +966,10 @@ def main():
         elif key in (ord("r"), ord("R")):
             sim.reset()
             print("↺ Restarted")
+        elif key in (ord("m"), ord("M")):
+            sim.marker_mode = "side" if sim.marker_mode == "center" else "center"
+            sim.reset()
+            print(f"Marker mode: {sim.marker_mode}")
         elif key in (ord("+"), ord("=")):
             sim.speed = min(sim.speed + 0.5, 12.0)
             print(f"Speed: {sim.speed:.1f}x")
