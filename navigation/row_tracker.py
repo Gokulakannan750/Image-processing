@@ -35,6 +35,7 @@ Row numbering schemes (same as before):
   "barcode"    — text encodes row (e.g. "ROW-3", "ROW4-TOP")
   "custom_map" — explicit {id: row} mapping in config
 """
+
 import re
 from typing import Dict, Optional
 
@@ -54,20 +55,20 @@ class RowTracker:
     def __init__(self) -> None:
         self._reload_settings()
 
-        self.current_row: Optional[int]    = None
-        self.current_end: Optional[str]    = None
+        self.current_row: Optional[int] = None
+        self.current_end: Optional[str] = None
         self.current_marker_id: Optional[str] = None
-        self.current_marker_type: MarkerType  = MarkerType.NORMAL
-        self.turns_completed: int  = 0
-        self.rows_completed: int   = 0
-        self._last_row_reached: bool = False   # True after LAST_ROW marker turn
-        self.field_finished: bool  = False
+        self.current_marker_type: MarkerType = MarkerType.NORMAL
+        self.turns_completed: int = 0
+        self.rows_completed: int = 0
+        self._last_row_reached: bool = False  # True after LAST_ROW marker turn
+        self.field_finished: bool = False
 
         log.info(
             "RowTracker initialised — scheme=%s, last_row_id=%s, stop_id=%s",
             self._scheme,
             self._last_row_id if self._last_row_id >= 0 else "barcode-only",
-            self._stop_id     if self._stop_id     >= 0 else "barcode-only",
+            self._stop_id if self._stop_id >= 0 else "barcode-only",
         )
 
     # ── Public API ─────────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ class RowTracker:
         Called by DecisionEngine each time a turn-trigger marker is detected.
         Updates current row and marker type.
         """
-        self.current_marker_id   = marker_id
+        self.current_marker_id = marker_id
         self.current_marker_type = self.classify_marker(marker_id)
         row, end = self._parse_row(marker_id)
 
@@ -112,7 +113,9 @@ class RowTracker:
         if row is not None and row != self.current_row:
             log.info(
                 "ROW TRACKER: now at Row %d (%s end) — marker '%s'",
-                row, end or "?", marker_id,
+                row,
+                end or "?",
+                marker_id,
             )
         if row is not None:
             self.current_row = row
@@ -123,10 +126,7 @@ class RowTracker:
         Returns True when the machine should halt the entire field operation
         (i.e. when a STOP marker is seen after the LAST_ROW turn was completed).
         """
-        return (
-            self.current_marker_type == MarkerType.STOP
-            and self._last_row_reached
-        )
+        return self.current_marker_type == MarkerType.STOP and self._last_row_reached
 
     def should_turn(self) -> bool:
         """
@@ -158,7 +158,8 @@ class RowTracker:
         self.field_finished = True
         log.info(
             "ROW TRACKER: FIELD COMPLETE — %d rows, %d turns total.",
-            self.rows_completed, self.turns_completed,
+            self.rows_completed,
+            self.turns_completed,
         )
 
     def is_finished(self) -> bool:
@@ -166,23 +167,23 @@ class RowTracker:
 
     def status(self) -> dict:
         return {
-            "current_row":         self.current_row,
-            "current_end":         self.current_end,
-            "current_marker_id":   self.current_marker_id,
+            "current_row": self.current_row,
+            "current_end": self.current_end,
+            "current_marker_id": self.current_marker_id,
             "current_marker_type": self.current_marker_type.name,
-            "last_row_reached":    self._last_row_reached,
-            "turns_completed":     self.turns_completed,
-            "rows_completed":      self.rows_completed,
-            "total_rows":          None,   # not needed — marker-driven
-            "is_finished":         self.field_finished,
+            "last_row_reached": self._last_row_reached,
+            "turns_completed": self.turns_completed,
+            "rows_completed": self.rows_completed,
+            "total_rows": None,  # not needed — marker-driven
+            "is_finished": self.field_finished,
         }
 
     # ── Row number parsing ─────────────────────────────────────────────────
 
     def _parse_row(self, marker_id: str) -> tuple:
         """Returns (row_number, end_label) or (None, None)."""
-        scheme   = self._scheme
-        raw_int  = self._extract_int(marker_id)
+        scheme = self._scheme
+        raw_int = self._extract_int(marker_id)
 
         if scheme == "simple" and raw_int is not None:
             row = max(1, raw_int) if raw_int > 0 else 1
@@ -218,10 +219,12 @@ class RowTracker:
         return int(m.group(1)) if m else None
 
     def _reload_settings(self) -> None:
-        self._scheme        = config_manager.get("row_tracker.scheme", "simple")
-        self._last_row_id   = int(config_manager.get("row_tracker.last_row_marker_id", 249))
-        self._stop_id       = int(config_manager.get("row_tracker.stop_marker_id", 248))
-        raw_map             = config_manager.get("row_tracker.id_map", {})
+        self._scheme = config_manager.get("row_tracker.scheme", "simple")
+        self._last_row_id = int(
+            config_manager.get("row_tracker.last_row_marker_id", 249)
+        )
+        self._stop_id = int(config_manager.get("row_tracker.stop_marker_id", 248))
+        raw_map = config_manager.get("row_tracker.id_map", {})
         self._id_map: Dict[int, int] = {int(k): int(v) for k, v in raw_map.items()}
 
     def reload_config(self) -> None:
