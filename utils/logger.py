@@ -3,12 +3,14 @@ utils/logger.py
 ===============
 Structured logging architecture with rotating files.
 Outputs separate logs for debug trace, runtime events, navigation, and safety.
+Also feeds the web dashboard log panel via DashboardLogHandler.
 """
 
 import logging
 import logging.handlers
 import os
 import sys
+from typing import Callable, Optional as _Optional
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -73,3 +75,50 @@ def setup_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
 
 def get_logger(name: str) -> logging.Logger:
     return setup_logger(name, level=logging.INFO)
+
+
+# ── Dashboard log handler ──────────────────────────────────────────────────
+
+class DashboardLogHandler(logging.Handler):
+    """Forwards log records to the web dashboard's log buffer.
+
+    Call attach_to_dashboard(push_fn) once after dashboard_state is created.
+    push_fn should be dashboard_state.push_log.
+    """
+
+    _push_fn: _Optional[Callable[[str], None]] = None
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self._push_fn is None:
+            return
+        try:
+            # Short format for the UI: level + logger name + message
+            msg = f"[{record.levelname}] {record.name}: {self.format(record).split(' | ')[-1]}"
+            self._push_fn(msg)
+        except Exception:
+            pass  # never let a logging handler crash the app
+
+
+_dashboard_handler: _Optional[DashboardLogHandler] = None
+
+
+def attach_dashboard_log_handler(push_fn: Callable[[str], None]) -> None:
+    """Wire all loggers into the dashboard log panel.
+
+    Call this once in main.py after dashboard_state is initialised:
+        from utils.logger import attach_dashboard_log_handler
+        attach_dashboard_log_handler(dashboard_state.push_log)
+    """
+    global _dashboard_handler
+    if _dashboard_handler is not None:
+        return  # already attached
+
+    handler = DashboardLogHandler(level=logging.INFO)
+    handler._push_fn = push_fn
+    handler.setFormatter(logging.Formatter("%(message)s"))  # raw message only
+    _dashboard_handler = handler
+
+    # Attach to the root logger so every module's log goes to the dashboard
+    root = logging.getLogger()
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)  # ensure root passes records down

@@ -47,7 +47,7 @@ class DashboardState:
         self.target_distance_m: Optional[float] = None
         self.uptime_s: float = 0.0
         self._start_time: float = time.time()
-        self._log_buffer: deque = deque(maxlen=60)
+        self._log_buffer: deque = deque(maxlen=200)
 
         # Ring buffers for historical trend data
         self._fps_history: deque = deque(maxlen=_HISTORY_LEN)

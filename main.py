@@ -15,7 +15,7 @@ from collections import deque
 import cv2
 
 from config.config_manager import config_manager
-from utils.logger import setup_logger, set_robot_id
+from utils.logger import setup_logger, set_robot_id, attach_dashboard_log_handler
 from utils.exceptions import RoboticsBaseError
 
 # Setup structured logger before importing components that log during init
@@ -87,6 +87,9 @@ def main() -> None:
     set_robot_id(robot_id)
     dashboard_state.robot_id = robot_id
     log.info("Robot ID: %s", robot_id)
+
+    # ── Wire all log output into the dashboard log panel ─────────────────
+    attach_dashboard_log_handler(dashboard_state.push_log)
 
     # ── Config hot-reload: file-watcher (cross-platform) + SIGHUP (Unix) ──
     config_manager.start_watch(interval_s=2.0)

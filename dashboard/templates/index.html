@@ -109,6 +109,7 @@
     .log-entry { color: var(--muted); }
     .log-entry .ts { color: var(--accent); margin-right: 6px; }
     .estop-line { color: var(--red); font-weight: bold; }
+    .warn-line  { color: var(--yellow); }
     /* Dot */
     .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
     .dot-green  { background: var(--green); }
@@ -266,16 +267,20 @@
       const logs = await fetch('/logs').then(r=>r.json());
       if (logs.length === lastCount) return;
       lastCount = logs.length;
+      const atBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;
       logBox.innerHTML = logs.map(l => {
-        const cls = /E-STOP|CRITICAL/.test(l.msg) ? 'log-entry estop-line' : 'log-entry';
+        const isCrit = /E-STOP|CRITICAL|OBSTACLE|STOPPED|ERROR/.test(l.msg);
+        const isWarn = /WARNING|WARN|RECOVERY/.test(l.msg);
+        const cls = isCrit ? 'log-entry estop-line' : isWarn ? 'log-entry warn-line' : 'log-entry';
         return `<div class="${cls}"><span class="ts">${l.t}</span>${esc(l.msg)}</div>`;
       }).join('');
+      // always scroll to bottom so newest entries are visible
       logBox.scrollTop = logBox.scrollHeight;
     } catch {}
   }
 
   setInterval(pollStatus, 500);
-  setInterval(pollLogs,  1000);
+  setInterval(pollLogs,   500);   // faster — match status poll rate
   pollStatus(); pollLogs();
 </script>
 </body>
