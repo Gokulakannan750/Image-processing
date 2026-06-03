@@ -46,26 +46,57 @@ WIN_W, WIN_H = 1280, 720
 PANEL_W = 330  # right info panel width
 FIELD_W = WIN_W - PANEL_W  # 950 px field canvas
 
-NUM_PATHS = 6  # number of row paths machine traverses
-CROP_W = 46  # green crop strip width (px)
-PATH_W = 60  # machine-path width (px)
-STRIP = CROP_W + PATH_W  # one repeating field unit
-
 MARGIN_L = 50  # left headland margin (px)
 MARGIN_T = 95  # top headland height (px)
 MARGIN_B = 85  # bottom headland height (px)
 
-# Path centre x positions (machine drives along these x values)
-PATH_CX = [MARGIN_L + CROP_W + PATH_W // 2 + i * STRIP for i in range(NUM_PATHS)]
-
-# Pole x positions — right-edge pole of each path (where markers are mounted)
-# Pole is between path[i] and the next crop row to its right
-POLE_X = [MARGIN_L + CROP_W + (i + 1) * STRIP for i in range(NUM_PATHS)]
-# Also the leftmost pole (left edge of path 0 = right edge of first crop row)
-LEFT_POLE_X = MARGIN_L + CROP_W
-
 FIELD_TOP_Y = MARGIN_T
 FIELD_BOT_Y = WIN_H - MARGIN_B
+
+# These are recomputed by recompute_layout() whenever the number of paths
+# changes (e.g. from the Controls window). Initial values are filled below.
+# Caps keep strips a sensible size so that, with few paths, the side-pole
+# marker stays within the camera's reach (offset from path centre < ~90px).
+PATH_W_MAX = 64
+CROP_W_MAX = 46
+
+NUM_PATHS = 6  # number of row paths machine traverses
+CROP_W = 46  # green crop strip width (px)   — derived from NUM_PATHS
+PATH_W = 60  # machine-path width (px)        — derived from NUM_PATHS
+STRIP = CROP_W + PATH_W
+FIELD_X0 = MARGIN_L  # left edge of the (centred) field block
+PATH_CX = []  # path centre x positions (machine drives along these)
+POLE_X = []  # right-edge pole x positions (side-marker mount points)
+LEFT_POLE_X = MARGIN_L + CROP_W
+
+
+def recompute_layout(num_paths):
+    """
+    Recompute all path/pole positions for the given number of paths.
+    Strip widths are capped so the field stays readable and the side-pole
+    marker remains within camera range; the whole block is centred.
+    Called at startup and whenever the 'Paths' control changes.
+    """
+    global NUM_PATHS, CROP_W, PATH_W, STRIP, PATH_CX, POLE_X, LEFT_POLE_X, FIELD_X0
+    num_paths = max(2, min(int(num_paths), 14))
+    NUM_PATHS = num_paths
+
+    avail = FIELD_W - 2 * MARGIN_L  # usable field width
+    lane = avail / num_paths
+    PATH_W = min(max(16, int(lane * 0.58)), PATH_W_MAX)
+    CROP_W = min(max(10, int(lane * 0.42)), CROP_W_MAX)
+    STRIP = CROP_W + PATH_W
+
+    # Centre the field block horizontally within the canvas.
+    block_w = num_paths * STRIP + CROP_W  # N lanes + the trailing crop row
+    FIELD_X0 = max(MARGIN_L, (FIELD_W - block_w) // 2)
+
+    PATH_CX = [FIELD_X0 + CROP_W + PATH_W // 2 + i * STRIP for i in range(num_paths)]
+    POLE_X = [FIELD_X0 + CROP_W + (i + 1) * STRIP for i in range(num_paths)]
+    LEFT_POLE_X = FIELD_X0 + CROP_W
+
+
+recompute_layout(NUM_PATHS)  # initialise PATH_CX / POLE_X
 
 # Marker geometry
 MK_HALF = 13  # half-size of marker square (px)
@@ -172,50 +203,41 @@ class Marker:
 # ─────────────────────────────────────────────────────────────────────────────
 #  BUILD MARKERS  — placed in the MIDDLE of each path at the headland end
 # ─────────────────────────────────────────────────────────────────────────────
-def build_markers(mode="center"):
+def build_markers(num_paths, mode="center"):
     """
-    Build the six field markers.
+    Build one marker per path for any number of paths.
 
-    mode == "center":
-      Marker stands centred on the MIDDLE of each path at the headland end,
-      facing straight down the path — directly ahead of the machine.
+    Path i is traversed UP if i is even, DOWN if i is odd. Its marker sits at
+    the FAR end of that path (TOP for even paths, BOTTOM for odd paths):
+      - the last path           (num_paths - 1)  → STOP     (field complete)
+      - the second-to-last path  (num_paths - 2)  → LAST-ROW (final U-turn)
+      - every other path                          → NORMAL   (U-turn, next row)
 
-    mode == "side":
-      Marker is mounted on the SIDE pole (right boundary of the path) and
-      angled SIDE_FACING_DEG (45°) toward the oncoming machine, so the
-      forward-facing camera still sees its face as it approaches.
-
-    Path traversal order (same in both modes):
-      Path 0 UP   → NORMAL    at TOP of path 0
-      Path 1 DOWN → NORMAL    at BOTTOM of path 1
-      Path 2 UP   → NORMAL    at TOP of path 2
-      Path 3 DOWN → NORMAL    at BOTTOM of path 3
-      Path 4 UP   → LAST-ROW  at TOP of path 4   (final U-turn here)
-      Path 5 DOWN → STOP      at BOTTOM of path 5 (field complete)
+    mode == "center": marker centred on the path, facing straight down it.
+    mode == "side"  : marker on the right-side pole, angled SIDE_FACING_DEG
+                      toward the oncoming machine.
     """
     markers = []
-    top_specs = [(0, "normal"), (2, "normal"), (4, "last_row")]
-    bot_specs = [(1, "normal"), (3, "normal"), (5, "stop")]
+    for i in range(num_paths):
+        is_top = i % 2 == 0
+        y = FIELD_TOP_Y if is_top else FIELD_BOT_Y
 
-    if mode == "side":
-        # Side pole = right boundary of the path. Marker angled toward the
-        # path (left) and toward the oncoming machine.
-        # TOP markers: machine comes from below → face DOWN-LEFT (135°).
-        # BOTTOM markers: machine comes from above → face UP-LEFT (225°).
-        for i, kind in top_specs:
-            markers.append(
-                Marker(POLE_X[i], FIELD_TOP_Y, kind, facing_deg=90 + SIDE_FACING_DEG)
-            )
-        for i, kind in bot_specs:
-            markers.append(
-                Marker(POLE_X[i], FIELD_BOT_Y, kind, facing_deg=270 - SIDE_FACING_DEG)
-            )
-    else:
-        # Centred on path, facing straight down the path (no angle).
-        for i, kind in top_specs:
-            markers.append(Marker(PATH_CX[i], FIELD_TOP_Y, kind))
-        for i, kind in bot_specs:
-            markers.append(Marker(PATH_CX[i], FIELD_BOT_Y, kind))
+        if i == num_paths - 1:
+            kind = "stop"
+        elif i == num_paths - 2:
+            kind = "last_row"
+        else:
+            kind = "normal"
+
+        if mode == "side":
+            x = POLE_X[i]
+            # TOP markers face down-left, BOTTOM markers face up-left.
+            facing = (90 + SIDE_FACING_DEG) if is_top else (270 - SIDE_FACING_DEG)
+        else:
+            x = PATH_CX[i]
+            facing = None
+
+        markers.append(Marker(x, y, kind, facing_deg=facing))
 
     return markers
 
@@ -229,8 +251,9 @@ class FieldSimulator:
         self.reset()
 
     def reset(self):
-        self.markers = build_markers(self.marker_mode)
-        self.speed = BASE_SPEED
+        self.markers = build_markers(NUM_PATHS, self.marker_mode)
+        if not hasattr(self, "speed"):
+            self.speed = BASE_SPEED
         self.paused = False
         self.view_angle = None  # live viewing angle to the active side marker
 
@@ -498,22 +521,22 @@ class FieldSimulator:
 
         # 3. Crop strips (green)
         for i in range(NUM_PATHS + 1):
-            x = MARGIN_L + i * STRIP
+            x = FIELD_X0 + i * STRIP
             cv2.rectangle(c, (x, 0), (x + CROP_W, WIN_H), C_CROP, -1)
 
         # 4. Machine paths (beige)
         for i in range(NUM_PATHS):
-            x = MARGIN_L + CROP_W + i * STRIP
+            x = FIELD_X0 + CROP_W + i * STRIP
             cv2.rectangle(c, (x, 0), (x + PATH_W, WIN_H), C_PATH, -1)
 
         # 5. Vertical pole lines — the key visual from the diagram
         #    One pole on each side of every crop row
         for i in range(NUM_PATHS + 1):
             # Left edge of crop row i
-            px = MARGIN_L + i * STRIP
+            px = FIELD_X0 + i * STRIP
             cv2.line(c, (px, 0), (px, WIN_H), C_POLE_LINE, POLE_LINE_W)
             # Right edge of crop row i
-            px2 = MARGIN_L + i * STRIP + CROP_W
+            px2 = FIELD_X0 + i * STRIP + CROP_W
             cv2.line(c, (px2, 0), (px2, WIN_H), C_POLE_LINE, POLE_LINE_W)
 
         # 6. Headland boundary lines
@@ -938,22 +961,94 @@ class FieldSimulator:
 # ─────────────────────────────────────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────────────────────────────────────
+CONTROLS_WIN = "Controls — drag sliders to adjust"
+
+
+def _noop(_):
+    pass
+
+
+def _build_controls_window():
+    """Create the Controls window with parameter trackbars."""
+    cv2.namedWindow(CONTROLS_WIN, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(CONTROLS_WIN, 430, 360)
+    # name, default, max
+    cv2.createTrackbar("Speed", CONTROLS_WIN, 3, 12, _noop)
+    cv2.createTrackbar("Paths", CONTROLS_WIN, NUM_PATHS, 14, _noop)
+    cv2.createTrackbar("Turn dist", CONTROLS_WIN, int(TRIGGER_DIST), 130, _noop)
+    cv2.createTrackbar("Camera range", CONTROLS_WIN, int(CAM_RANGE), 250, _noop)
+    cv2.createTrackbar("Camera FOV", CONTROLS_WIN, int(CAM_HALF_DEG), 85, _noop)
+    cv2.createTrackbar("Side angle", CONTROLS_WIN, int(SIDE_FACING_DEG), 85, _noop)
+    cv2.createTrackbar("Readable max", CONTROLS_WIN, int(READABLE_MAX_DEG), 89, _noop)
+    cv2.createTrackbar("Side mode", CONTROLS_WIN, 0, 1, _noop)
+    cv2.createTrackbar("Pause", CONTROLS_WIN, 0, 1, _noop)
+
+
+def _apply_controls(sim):
+    """Read the trackbars each frame and apply them to the simulator.
+
+    Structural changes (path count, side angle, marker mode) rebuild the
+    field; movement/detection params apply live without a rebuild.
+    """
+    global TRIGGER_DIST, CAM_RANGE, CAM_HALF_DEG, SIDE_FACING_DEG, READABLE_MAX_DEG
+
+    try:
+        speed_v = cv2.getTrackbarPos("Speed", CONTROLS_WIN)
+        paths_v = max(2, cv2.getTrackbarPos("Paths", CONTROLS_WIN))
+        trig_v = max(20, cv2.getTrackbarPos("Turn dist", CONTROLS_WIN))
+        range_v = max(60, cv2.getTrackbarPos("Camera range", CONTROLS_WIN))
+        fov_v = max(15, cv2.getTrackbarPos("Camera FOV", CONTROLS_WIN))
+        side_v = max(5, cv2.getTrackbarPos("Side angle", CONTROLS_WIN))
+        read_v = max(20, cv2.getTrackbarPos("Readable max", CONTROLS_WIN))
+        mode_v = cv2.getTrackbarPos("Side mode", CONTROLS_WIN)
+        pause_v = cv2.getTrackbarPos("Pause", CONTROLS_WIN)
+    except cv2.error:
+        return  # Controls window closed
+
+    # ── live params (no rebuild needed) ──────────────────────────────────
+    sim.speed = max(0.5, float(speed_v))
+    TRIGGER_DIST = trig_v
+    CAM_RANGE = range_v
+    CAM_HALF_DEG = fov_v
+    READABLE_MAX_DEG = read_v
+    sim.paused = bool(pause_v)
+
+    # ── structural params (rebuild the field when changed) ───────────────
+    want_mode = "side" if mode_v == 1 else "center"
+    need_reset = False
+    if paths_v != NUM_PATHS:
+        recompute_layout(paths_v)
+        need_reset = True
+    if side_v != SIDE_FACING_DEG:
+        SIDE_FACING_DEG = side_v
+        need_reset = True
+    if want_mode != sim.marker_mode:
+        sim.marker_mode = want_mode
+        need_reset = True
+    if need_reset:
+        keep_speed = sim.speed
+        sim.reset()
+        sim.speed = keep_speed
+
+
 def main():
-    print("=" * 58)
+    print("=" * 60)
     print("  AgriBot Field Simulator")
-    print("  Markers on SIDE POLES — matching real field layout")
-    print("  SPACE=pause  R=restart  +/-=speed  Q=quit")
-    print("=" * 58)
+    print("  A 'Controls' window lets you tune speed, paths, camera, etc.")
+    print("  Keys:  SPACE=pause  M=marker mode  R=restart  +/-=speed  Q=quit")
+    print("=" * 60)
 
     sim = FieldSimulator()
     win = "AgriBot Field Simulator — Q to quit"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win, WIN_W, WIN_H)
+    _build_controls_window()
 
     frame_time = 1.0 / 60.0
 
     while True:
         t0 = time.time()
+        _apply_controls(sim)
         sim.update()
         cv2.imshow(win, sim.draw())
 
@@ -961,21 +1056,20 @@ def main():
         if key in (ord("q"), ord("Q"), 27):
             break
         elif key in (ord(" "), ord("p"), ord("P")):
-            sim.paused = not sim.paused
-            print("⏸ Paused" if sim.paused else "▶ Resumed")
+            new = 0 if cv2.getTrackbarPos("Pause", CONTROLS_WIN) else 1
+            cv2.setTrackbarPos("Pause", CONTROLS_WIN, new)
         elif key in (ord("r"), ord("R")):
             sim.reset()
             print("↺ Restarted")
         elif key in (ord("m"), ord("M")):
-            sim.marker_mode = "side" if sim.marker_mode == "center" else "center"
-            sim.reset()
-            print(f"Marker mode: {sim.marker_mode}")
+            new = 0 if cv2.getTrackbarPos("Side mode", CONTROLS_WIN) else 1
+            cv2.setTrackbarPos("Side mode", CONTROLS_WIN, new)
         elif key in (ord("+"), ord("=")):
-            sim.speed = min(sim.speed + 0.5, 12.0)
-            print(f"Speed: {sim.speed:.1f}x")
+            cur = cv2.getTrackbarPos("Speed", CONTROLS_WIN)
+            cv2.setTrackbarPos("Speed", CONTROLS_WIN, min(cur + 1, 12))
         elif key in (ord("-"), ord("_")):
-            sim.speed = max(sim.speed - 0.5, 0.5)
-            print(f"Speed: {sim.speed:.1f}x")
+            cur = cv2.getTrackbarPos("Speed", CONTROLS_WIN)
+            cv2.setTrackbarPos("Speed", CONTROLS_WIN, max(cur - 1, 1))
 
         sleep = frame_time - (time.time() - t0)
         if sleep > 0:
