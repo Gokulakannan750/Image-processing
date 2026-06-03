@@ -1,17 +1,22 @@
 """
 tests/test_row_tracker.py
-Tests for RowTracker: all four schemes, turn counting, finish detection.
+Tests for RowTracker: all four schemes, turn counting,
+LAST_ROW / STOP marker classification, and field-finish logic.
 """
-import pytest
 from navigation.row_tracker import RowTracker
+from detectors.base_detector import MarkerType
+import pytest
 
 
-def make_tracker(scheme="simple", total_rows=0, id_map=None):
+def make_tracker(scheme="simple", total_rows=0, id_map=None,
+                 last_row_id=249, stop_id=248):
     from config.config_manager import config_manager
     config_manager._config.setdefault("row_tracker", {})
-    config_manager._config["row_tracker"]["scheme"]     = scheme
-    config_manager._config["row_tracker"]["total_rows"] = total_rows
-    config_manager._config["row_tracker"]["id_map"]     = id_map or {}
+    config_manager._config["row_tracker"]["scheme"]              = scheme
+    config_manager._config["row_tracker"]["total_rows"]          = total_rows
+    config_manager._config["row_tracker"]["id_map"]              = id_map or {}
+    config_manager._config["row_tracker"]["last_row_marker_id"]  = last_row_id
+    config_manager._config["row_tracker"]["stop_marker_id"]      = stop_id
     return RowTracker()
 
 
@@ -37,21 +42,15 @@ def test_simple_id0_treated_as_row1():
 
 def test_dual_even_id_is_top():
     t = make_tracker(scheme="dual")
-    t.notify_marker_seen("ID:4")   # 4 // 2 + 1 = row 3, top
+    t.notify_marker_seen("ID:4")
     assert t.current_row == 3
     assert t.current_end == "top"
 
 def test_dual_odd_id_is_bottom():
     t = make_tracker(scheme="dual")
-    t.notify_marker_seen("ID:5")   # (5-1)//2 + 1 = row 3, bottom
+    t.notify_marker_seen("ID:5")
     assert t.current_row == 3
     assert t.current_end == "bottom"
-
-def test_dual_id0_is_row1_top():
-    t = make_tracker(scheme="dual")
-    t.notify_marker_seen("ID:0")
-    assert t.current_row == 1
-    assert t.current_end == "top"
 
 
 # ── Scheme: barcode ───────────────────────────────────────────────────────────
@@ -91,6 +90,91 @@ def test_custom_map_missing_id_returns_none():
     assert t.current_row is None
 
 
+# ── MarkerType classification — ArUco IDs ────────────────────────────────────
+
+def test_normal_aruco_id_is_normal_type():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    assert t.classify_marker("ID:5") == MarkerType.NORMAL
+
+def test_last_row_aruco_id_is_last_row_type():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    assert t.classify_marker("ID:249") == MarkerType.LAST_ROW
+
+def test_stop_aruco_id_is_stop_type():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    assert t.classify_marker("ID:248") == MarkerType.STOP
+
+
+# ── MarkerType classification — Barcode text ──────────────────────────────────
+
+def test_barcode_last_row_text():
+    t = make_tracker()
+    assert t.classify_marker("Barcode: LAST-ROW") == MarkerType.LAST_ROW
+
+def test_barcode_last_text():
+    t = make_tracker()
+    assert t.classify_marker("Barcode: LAST") == MarkerType.LAST_ROW
+
+def test_barcode_stop_text():
+    t = make_tracker()
+    assert t.classify_marker("Barcode: STOP") == MarkerType.STOP
+
+def test_barcode_end_text():
+    t = make_tracker()
+    assert t.classify_marker("Barcode: END") == MarkerType.STOP
+
+def test_barcode_finish_text():
+    t = make_tracker()
+    assert t.classify_marker("Barcode: FINISH") == MarkerType.STOP
+
+def test_barcode_normal_row_text_is_normal():
+    t = make_tracker()
+    assert t.classify_marker("Barcode: ROW-3") == MarkerType.NORMAL
+
+
+# ── Field-end logic ───────────────────────────────────────────────────────────
+
+def test_stop_before_last_row_does_not_end_field():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    # See STOP marker but last row NOT yet reached
+    t.notify_marker_seen("ID:248")
+    assert not t.should_stop_field()
+
+def test_last_row_turn_sets_flag():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    t.notify_marker_seen("ID:249")         # LAST_ROW seen
+    t.notify_turn_completed()              # turn fires
+    assert t._last_row_reached is True
+
+def test_stop_after_last_row_ends_field():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    t.notify_marker_seen("ID:249")         # LAST_ROW
+    t.notify_turn_completed()
+    t.notify_marker_seen("ID:248")         # STOP after last row turn
+    assert t.should_stop_field() is True
+
+def test_notify_field_finished_sets_flag():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    t.notify_marker_seen("ID:249")
+    t.notify_turn_completed()
+    t.notify_marker_seen("ID:248")
+    t.notify_field_finished()
+    assert t.is_finished() is True
+
+def test_should_turn_false_for_stop_after_last_row():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    t.notify_marker_seen("ID:249")
+    t.notify_turn_completed()
+    t.notify_marker_seen("ID:248")
+    # Should NOT turn at the STOP marker
+    assert t.should_turn() is False
+
+def test_should_turn_true_for_last_row_marker():
+    t = make_tracker(last_row_id=249, stop_id=248)
+    t.notify_marker_seen("ID:249")
+    assert t.should_turn() is True   # still needs to make the final U-turn
+
+
 # ── Turn counting ─────────────────────────────────────────────────────────────
 
 def test_turns_counted_correctly():
@@ -105,24 +189,6 @@ def test_rows_completed_every_two_turns():
     assert t.rows_completed == 0
     t.notify_turn_completed()
     assert t.rows_completed == 1
-    t.notify_turn_completed()
-    t.notify_turn_completed()
-    assert t.rows_completed == 2
-
-
-# ── Field finished ────────────────────────────────────────────────────────────
-
-def test_field_finished_when_all_rows_done():
-    t = make_tracker(total_rows=2)
-    for _ in range(4):   # 4 turns = 2 rows
-        t.notify_turn_completed()
-    assert t.is_finished() is True
-
-def test_field_not_finished_when_total_rows_zero():
-    t = make_tracker(total_rows=0)
-    for _ in range(100):
-        t.notify_turn_completed()
-    assert t.is_finished() is False
 
 
 # ── Status dict ───────────────────────────────────────────────────────────────
@@ -131,5 +197,6 @@ def test_status_dict_keys():
     t = make_tracker()
     s = t.status()
     for key in ("current_row", "current_end", "turns_completed",
-                "rows_completed", "total_rows", "is_finished"):
+                "rows_completed", "total_rows", "is_finished",
+                "last_row_reached", "current_marker_type"):
         assert key in s

@@ -67,6 +67,7 @@ class DashboardState:
         self.rows_completed: int = 0
         self.total_rows: Optional[int] = None
         self.field_finished: bool = False
+        self.last_row_reached: bool = False
 
     def update(
         self,
@@ -128,12 +129,13 @@ class DashboardState:
                 "uptime_s": round(self.uptime_s),
                 "yolo_faulted": self.yolo_faulted,
                 "row": {
-                    "current_row": self.current_row,
-                    "current_end": self.current_end,
-                    "turns_completed": self.turns_completed,
-                    "rows_completed": self.rows_completed,
-                    "total_rows": self.total_rows,
-                    "field_finished": self.field_finished,
+                    "current_row":      self.current_row,
+                    "current_end":      self.current_end,
+                    "turns_completed":  self.turns_completed,
+                    "rows_completed":   self.rows_completed,
+                    "total_rows":       self.total_rows,
+                    "field_finished":   self.field_finished,
+                    "last_row_reached": getattr(self, "last_row_reached", False),
                 },
             }
 

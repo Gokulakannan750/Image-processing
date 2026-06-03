@@ -121,6 +121,7 @@
     .row-stat:last-child { border-bottom:none; }
     .row-val { font-weight:700; color:var(--accent); }
     #field-done { display:none; background:#3fb95022; border:1px solid var(--green); color:var(--green); font-weight:700; font-size:14px; padding:8px 16px; text-align:center; border-radius:4px; margin-top:8px; }
+    #last-row-warn { display:none; background:#d2992222; border:1px solid var(--yellow); color:var(--yellow); font-weight:700; font-size:13px; padding:6px 12px; text-align:center; border-radius:4px; margin-top:6px; }
     /* Alert banner */
     #yolo-alert {
       display: none;
@@ -184,7 +185,8 @@
     <div class="row-stat"><span>Turns Completed</span><span class="row-val" id="rt-turns">0</span></div>
     <div class="row-stat"><span>Rows Completed</span><span class="row-val" id="rt-rows">0</span></div>
     <div class="row-stat"><span>Total Rows (field)</span><span class="row-val" id="rt-total">—</span></div>
-    <div id="field-done">✅ All rows completed!</div>
+    <div id="last-row-warn">⚠ LAST ROW — turning, then stopping at STOP marker</div>
+    <div id="field-done">✅ FIELD COMPLETE — All rows finished!</div>
   </div>
 
   <!-- History chart -->
@@ -263,7 +265,8 @@
         document.getElementById('rt-turns').textContent = r.turns_completed;
         document.getElementById('rt-rows').textContent  = r.rows_completed;
         document.getElementById('rt-total').textContent = r.total_rows    != null ? r.total_rows : 'Not set';
-        document.getElementById('field-done').style.display = r.field_finished ? 'block' : 'none';
+        document.getElementById('field-done').style.display     = r.field_finished   ? 'block' : 'none';
+        document.getElementById('last-row-warn').style.display = r.last_row_reached && !r.field_finished ? 'block' : 'none';
       }
 
       const list = document.getElementById('obstacle-list');

@@ -6,8 +6,16 @@ Abstract base class and data structures for computer vision detectors.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import List, Optional, Tuple
 import numpy as np
+
+
+class MarkerType(Enum):
+    """Classifies what a detected marker means for field operation."""
+    NORMAL   = auto()   # Regular row-end marker → trigger U-turn and continue
+    LAST_ROW = auto()   # Last row marker → trigger final U-turn, then watch for STOP
+    STOP     = auto()   # Stop marker → halt the entire field operation (no more turns)
 
 
 @dataclass
@@ -32,6 +40,7 @@ class DetectionTarget:
 
     priority: int = 1  # Lower number = higher priority
     is_turn_trigger: bool = False
+    marker_type: MarkerType = MarkerType.NORMAL
 
 
 @dataclass

@@ -98,12 +98,21 @@ row_tracker:
   #   "dual"       — even IDs are top ends, odd IDs are bottom ends
   #                  (ID 0 → Row 1 top, ID 1 → Row 1 bottom, ID 2 → Row 2 top …)
   #   "barcode"    — barcode/QR text encodes the row (e.g. "ROW-3", "3", "ROW3-TOP")
+  #                  Special texts: "LAST-ROW" triggers final turn; "STOP" halts the field
   #   "custom_map" — explicit mapping in id_map below
   scheme: "simple"
 
-  # Total number of rows in the field. Set to 0 if unknown.
-  # When all rows are completed the dashboard shows "All rows done!"
+  # Total number of rows in the field. Set to 0 if using LAST_ROW/STOP markers instead.
   total_rows: 0
+
+  # ── Special end-of-field markers ─────────────────────────────────────────
+  # ArUco marker ID that means "this is the last row — turn here, then stop at next marker"
+  # Set to -1 to disable (use barcode text "LAST-ROW" instead)
+  last_row_marker_id: 249
+
+  # ArUco marker ID that means "stop here — field is complete, no more turns"
+  # Set to -1 to disable (use barcode text "STOP" instead)
+  stop_marker_id: 248
 
   # Used only when scheme = "custom_map"
   # Format:  marker_id: row_number
