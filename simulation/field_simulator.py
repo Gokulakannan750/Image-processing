@@ -122,6 +122,10 @@ SIDE_FACING_DEG = 45  # angle of side marker face away from the travel axis
 # beyond which the marker can no longer be read. ArUco is the most tolerant.
 READABLE_MAX_DEG = 65  # ArUco practical limit (QR ~45, 1D barcode ~20)
 
+# Sensor-confirmed turn completion
+REENTRY_BALANCE_TOL = 4.0  # |left-right| gap (px) considered "centred"
+REENTRY_LOCK_FRAMES = 8  # frames of balanced sensors before the turn is "locked"
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  COLOURS  (BGR)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +289,10 @@ class FieldSimulator:
         self.right_dist = PATH_W / 2.0  # distance from right sensor to right plants
         self.steer_hint = "CENTRED"  # "STEER LEFT" | "STEER RIGHT" | "CENTRED"
 
+        # Sensor-confirmed turn re-entry
+        self.entry_offset = 0.0  # lateral error at the end of the open-loop arc
+        self.lock_frames = 0  # consecutive balanced-sensor frames after a turn
+
         # Timing
         self.start_time = time.time()
         self.done_time = None
@@ -372,7 +380,10 @@ class FieldSimulator:
         if nxt >= NUM_PATHS:
             return None
         x0 = float(start_x)
-        x3 = float(PATH_CX[nxt])
+        # The open-loop (calibrated) arc aims for the next path centre but ends
+        # slightly off-centre by entry_offset — simulating imperfect mechanical
+        # calibration. The side sensors then correct it during re-entry.
+        x3 = float(PATH_CX[nxt] + self.entry_offset)
         ctrl = 95  # headland arc depth
 
         if at_top:
@@ -397,6 +408,8 @@ class FieldSimulator:
             self._update_driving()
         elif self.phase == "turning":
             self._update_turning()
+        elif self.phase == "acquiring":
+            self._update_acquiring()
 
     def _update_driving(self):
         mk = self._target_marker()
@@ -501,6 +514,9 @@ class FieldSimulator:
         self.right_dist = right_plant - (self.mx + M_W / 2)
 
     def _start_turn(self, mk):
+        # Imperfect mechanical turn: end the arc a little off-centre so the
+        # side sensors have something to correct on re-entry.
+        self.entry_offset = random.uniform(-0.28, 0.28) * PATH_W
         curves = self._build_turn_curve(
             at_top=(self.going_up),
             start_x=self.mx,
@@ -531,16 +547,65 @@ class FieldSimulator:
         self.angle = bez_angle(P0, P1, P2, P3, max(0.001, t))
 
         if t >= 1.0:
+            # Open-loop arc finished. The machine is over the new path but
+            # NOT yet centred (entry_offset). Hand over to sensor-confirmed
+            # re-entry instead of snapping to the exact centre.
             self.path_idx += 1
             self.going_up = not self.going_up
             self.current_row = self.path_idx + 1
-            self.phase = "driving"
-            self.state_name = "DRIVING"
+            self.phase = "acquiring"
+            self.state_name = "RE-ENTERING"
             self.cam_state = "idle"
-            # Snap to exact path centre
-            self.mx = PATH_CX[self.path_idx]
+            self.lock_frames = 0
+            self.mx = PATH_CX[self.path_idx] + self.entry_offset
         # NOTE: the STOP marker after the last-row turn is handled in
         # _update_driving (when mk.kind == 'stop' it calls _finish_field()).
+
+    def _update_acquiring(self):
+        """
+        Sensor-confirmed turn completion. After the open-loop arc, the machine
+        creeps forward while the side sensors pull it to the centre of the new
+        path. Only when BOTH sensors report balanced gaps for several frames
+        is the turn declared complete and normal driving resumes.
+        """
+        # Creep forward slowly into the new path.
+        creep = self.speed * 0.45
+        if self.going_up:
+            self.my -= creep
+            self.angle = -math.pi / 2
+        else:
+            self.my += creep
+            self.angle = math.pi / 2
+
+        # Read the side sensors and steer strongly toward the centre.
+        left_plant, right_plant = self._path_edges(self.path_idx)
+        self.mx = max(left_plant + M_W / 2, min(self.mx, right_plant - M_W / 2))
+        self.left_dist = (self.mx - M_W / 2) - left_plant
+        self.right_dist = right_plant - (self.mx + M_W / 2)
+        diff = self.right_dist - self.left_dist
+        self.mx += 0.22 * diff  # firmer correction during re-entry
+        if abs(diff) > REENTRY_BALANCE_TOL:
+            self.steer_hint = "STEER RIGHT" if diff > 0 else "STEER LEFT"
+        else:
+            self.steer_hint = "CENTRED"
+
+        # Recompute for display after the nudge.
+        self.left_dist = (self.mx - M_W / 2) - left_plant
+        self.right_dist = right_plant - (self.mx + M_W / 2)
+
+        # Sensor lock: both gaps positive (machine inside the lane) AND balanced.
+        balanced = (
+            self.left_dist > 0
+            and self.right_dist > 0
+            and abs(self.right_dist - self.left_dist) <= REENTRY_BALANCE_TOL
+        )
+        self.lock_frames = self.lock_frames + 1 if balanced else 0
+
+        if self.lock_frames >= REENTRY_LOCK_FRAMES:
+            # Both sensors confirm the machine is centred in the new row.
+            self.phase = "driving"
+            self.state_name = "DRIVING"
+            self.lock_frames = 0
 
     def _finish_field(self):
         self.phase = "done"
@@ -775,7 +840,7 @@ class FieldSimulator:
 
     def _draw_sensors(self, c):
         """Draw the left/right distance sensors that keep the machine centred."""
-        if self.phase != "driving":
+        if self.phase not in ("driving", "acquiring"):
             return
         cy = int(self.my)
         left_plant, right_plant = self._path_edges(self.path_idx)
@@ -858,12 +923,14 @@ class FieldSimulator:
         badge_col = {
             "driving": C_GREEN,
             "turning": C_YELLOW,
+            "acquiring": (0, 200, 200),
             "stopped": C_RED,
             "done": C_GREEN,
         }.get(self.phase, C_WHITE)
+        badge_txt = "RE-ENTER" if self.phase == "acquiring" else self.phase.upper()
         cv2.putText(
             c,
-            self.phase.upper(),
+            badge_txt,
             (cx + M_W + 4, cy - 6),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.40,
@@ -905,6 +972,7 @@ class FieldSimulator:
         scol = {
             "DRIVING": C_GREEN,
             "TURNING": C_YELLOW,
+            "RE-ENTERING": (0, 200, 200),
             "STOPPED": C_RED,
             "FIELD COMPLETE": (0, 230, 0),
         }.get(self.state_name, C_WHITE)
@@ -951,6 +1019,12 @@ class FieldSimulator:
         row("Right gap", f"{self.right_dist:.0f} px", C_WHITE)
         hint_col = C_YELLOW if self.steer_hint != "CENTRED" else C_GREEN
         row("Action", self.steer_hint, hint_col)
+        if self.phase == "acquiring":
+            row(
+                "Turn re-entry",
+                f"sensor lock {self.lock_frames}/{REENTRY_LOCK_FRAMES}",
+                (0, 200, 200),
+            )
         div()
 
         # Marker info — show each marker and its current state
