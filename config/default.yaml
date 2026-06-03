@@ -92,6 +92,24 @@ dashboard:
   host: "0.0.0.0"
   port: 5000
 
+row_tracker:
+  # How marker IDs map to row numbers. Options:
+  #   "simple"     — marker ID = row number  (ID 1 → Row 1, ID 2 → Row 2 …)
+  #   "dual"       — even IDs are top ends, odd IDs are bottom ends
+  #                  (ID 0 → Row 1 top, ID 1 → Row 1 bottom, ID 2 → Row 2 top …)
+  #   "barcode"    — barcode/QR text encodes the row (e.g. "ROW-3", "3", "ROW3-TOP")
+  #   "custom_map" — explicit mapping in id_map below
+  scheme: "simple"
+
+  # Total number of rows in the field. Set to 0 if unknown.
+  # When all rows are completed the dashboard shows "All rows done!"
+  total_rows: 0
+
+  # Used only when scheme = "custom_map"
+  # Format:  marker_id: row_number
+  # Example: {0: 1, 5: 2, 10: 3}
+  id_map: {}
+
 debug:
   visualize_commands: true
   draw_pose_axes: true

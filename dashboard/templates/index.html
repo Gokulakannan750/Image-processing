@@ -115,6 +115,12 @@
     .dot-green  { background: var(--green); }
     .dot-red    { background: var(--red); box-shadow: 0 0 6px var(--red); }
     .dot-yellow { background: var(--yellow); }
+    /* Row tracker panel */
+    #row-card { grid-column: 2; }
+    .row-stat { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .row-stat:last-child { border-bottom:none; }
+    .row-val { font-weight:700; color:var(--accent); }
+    #field-done { display:none; background:#3fb95022; border:1px solid var(--green); color:var(--green); font-weight:700; font-size:14px; padding:8px 16px; text-align:center; border-radius:4px; margin-top:8px; }
     /* Alert banner */
     #yolo-alert {
       display: none;
@@ -168,6 +174,17 @@
   <div class="card" id="log-card">
     <h2>System Log</h2>
     <div id="log-box"></div>
+  </div>
+
+  <!-- Row Tracker -->
+  <div class="card" id="row-card">
+    <h2>Row Tracker</h2>
+    <div class="row-stat"><span>Current Row</span><span class="row-val" id="rt-row">—</span></div>
+    <div class="row-stat"><span>End Detected</span><span class="row-val" id="rt-end">—</span></div>
+    <div class="row-stat"><span>Turns Completed</span><span class="row-val" id="rt-turns">0</span></div>
+    <div class="row-stat"><span>Rows Completed</span><span class="row-val" id="rt-rows">0</span></div>
+    <div class="row-stat"><span>Total Rows (field)</span><span class="row-val" id="rt-total">—</span></div>
+    <div id="field-done">✅ All rows completed!</div>
   </div>
 
   <!-- History chart -->
@@ -237,6 +254,17 @@
       document.getElementById('conn-dot').className =
         d.state==='STOPPED' ? 'dot dot-red' : d.state==='TURNING' ? 'dot dot-yellow' : 'dot dot-green';
       document.getElementById('yolo-alert').style.display = d.yolo_faulted ? 'block' : 'none';
+
+      // Row tracker
+      if (d.row) {
+        const r = d.row;
+        document.getElementById('rt-row').textContent   = r.current_row   != null ? 'Row ' + r.current_row : '—';
+        document.getElementById('rt-end').textContent   = r.current_end   ? r.current_end.toUpperCase() : '—';
+        document.getElementById('rt-turns').textContent = r.turns_completed;
+        document.getElementById('rt-rows').textContent  = r.rows_completed;
+        document.getElementById('rt-total').textContent = r.total_rows    != null ? r.total_rows : 'Not set';
+        document.getElementById('field-done').style.display = r.field_finished ? 'block' : 'none';
+      }
 
       const list = document.getElementById('obstacle-list');
       list.innerHTML = '';

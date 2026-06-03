@@ -233,6 +233,15 @@ def main() -> None:
                 )
                 dashboard_state.yolo_faulted = registry.is_yolo_faulted()
 
+                # Push row tracking state to dashboard
+                rt = decision_engine.row_tracker.status()
+                dashboard_state.current_row    = rt["current_row"]
+                dashboard_state.current_end    = rt["current_end"]
+                dashboard_state.turns_completed = rt["turns_completed"]
+                dashboard_state.rows_completed  = rt["rows_completed"]
+                dashboard_state.total_rows      = rt["total_rows"]
+                dashboard_state.field_finished  = rt["is_finished"]
+
                 cv2.imshow("Robotics Vision Output", annotated_frame)
 
                 # Recording

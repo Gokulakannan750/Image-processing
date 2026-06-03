@@ -60,6 +60,14 @@ class DashboardState:
         self.robot_id: str = "robot-0"
         self.yolo_faulted: bool = False
 
+        # Row tracking (populated by main loop from decision_engine.row_tracker)
+        self.current_row: Optional[int] = None
+        self.current_end: Optional[str] = None
+        self.turns_completed: int = 0
+        self.rows_completed: int = 0
+        self.total_rows: Optional[int] = None
+        self.field_finished: bool = False
+
     def update(
         self,
         frame: Optional[np.ndarray],
@@ -119,6 +127,14 @@ class DashboardState:
                 ],
                 "uptime_s": round(self.uptime_s),
                 "yolo_faulted": self.yolo_faulted,
+                "row": {
+                    "current_row": self.current_row,
+                    "current_end": self.current_end,
+                    "turns_completed": self.turns_completed,
+                    "rows_completed": self.rows_completed,
+                    "total_rows": self.total_rows,
+                    "field_finished": self.field_finished,
+                },
             }
 
     def get_prometheus_metrics(self) -> str:

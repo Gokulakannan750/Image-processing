@@ -11,6 +11,7 @@ from detectors.base_detector import DetectionResult
 from navigation.vehicle_state import VehicleStateMachine, State
 from navigation.recovery_manager import RecoveryManager
 from navigation.navigation_filter import NavigationFilter
+from navigation.row_tracker import RowTracker
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -25,6 +26,7 @@ class DecisionEngine:
 
         self.recovery_manager = RecoveryManager(self.state_machine)
         self.nav_filter = NavigationFilter()
+        self.row_tracker = RowTracker()
         self._obstacle_blocked: bool = False
 
     def process_detection(self, result: DetectionResult) -> Tuple[State, float]:
@@ -46,9 +48,11 @@ class DecisionEngine:
             self.state_machine.transition_to(State.DRIVING, "Obstacle cleared")
             log.info("Obstacle cleared — resuming navigation.")
 
-        # Notify recovery manager if we see a turn trigger
+        # Notify recovery manager and row tracker if we see a turn trigger
         if result.should_turn:
             self.recovery_manager.notify_turn_trigger_visible()
+            if result.primary_target is not None:
+                self.row_tracker.notify_marker_seen(result.primary_target.id)
 
         # Check for valid targets and manage recovery state
         has_target = result.has_targets
@@ -68,6 +72,7 @@ class DecisionEngine:
                     State.TURNING, f"Marker {primary.id} reached"
                 ):
                     self._issue_u_turn_command(primary.id)
+                    self.row_tracker.notify_turn_completed()
 
         elif current_state == State.STOPPED:
             self._issue_stop_command()
