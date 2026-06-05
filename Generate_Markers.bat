@@ -19,6 +19,9 @@ set /p rows=How many crop rows does your field have (press Enter for 8)?
 if "%rows%"=="" set "rows=8"
 
 echo.
+echo Clearing any old markers so only this field's markers remain ...
+if exist "markers\aruco_marker_*.png" del /q "markers\aruco_marker_*.png"
+
 echo Generating row markers 1..%rows% plus LAST-ROW and STOP ...
 echo.
 
