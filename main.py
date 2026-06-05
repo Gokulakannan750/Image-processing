@@ -7,6 +7,7 @@ decision engine, safety monitoring, and command queue execution.
 """
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -60,6 +61,12 @@ def parse_arguments() -> argparse.Namespace:
         help="Replay playback speed multiplier (e.g. 2.0 = 2x)",
     )
     parser.add_argument(
+        "--video",
+        type=str,
+        default=None,
+        help="Play a recorded video file as the camera source (e.g. field.mp4)",
+    )
+    parser.add_argument(
         "--robot-id",
         type=str,
         default=None,
@@ -81,6 +88,15 @@ def main() -> None:
     if args.config:
         config_manager.config_path = args.config
         config_manager.load()
+
+    # CLI --video overrides the camera source with a recorded video file.
+    if args.video:
+        if not os.path.isfile(args.video):
+            log.error("Video file not found: %s", args.video)
+            sys.exit(1)
+        config_manager._config.setdefault("camera", {})
+        config_manager._config["camera"]["source"] = args.video
+        log.info("Using video file as camera source: %s", args.video)
 
     # CLI --robot-id takes precedence over config file value
     robot_id: str = args.robot_id or config_manager.get("robot_id", "robot-0")
