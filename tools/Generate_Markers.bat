@@ -1,6 +1,8 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+REM This .bat lives in tools\ — step up to the project root so the
+REM relative paths below (tools\..., markers\...) work correctly.
+cd /d "%~dp0.."
 
 echo ==================================================
 echo     AgriBot  -  ArUco Marker Generator
@@ -33,7 +35,7 @@ echo --------------------------------------------------
 echo  Done!  Opening the "markers" folder...
 echo  Print each at least 20 cm x 20 cm and laminate.
 echo --------------------------------------------------
-start "" "%~dp0markers"
+start "" "%CD%\markers"
 
 echo.
 pause
