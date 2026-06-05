@@ -20,3 +20,6 @@ training/datasets/
 
 # Recorded sessions (can be large)
 recordings/
+
+# Generated ArUco markers (per-field, regenerate with tools/Generate_Markers.bat)
+markers/
