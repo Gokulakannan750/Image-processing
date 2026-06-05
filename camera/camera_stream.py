@@ -3,13 +3,23 @@ camera/camera_stream.py
 ========================
 Threaded wrapper around cv2.VideoCapture.
 Provides a non-blocking stream and auto-recovery health monitoring.
+
+Source selection (config: camera.source, falls back to camera.index):
+  - integer (e.g. 0)            -> live USB / built-in camera
+  - "video.mp4" (file path)     -> play a pre-recorded video file
+  - "http://.../video" (URL)    -> IP / network camera stream
+
+When the source is a video FILE, frames are paced to the file's native FPS
+and (by default) the video loops so you can test continuously without a
+real machine. Set camera.loop_video: false to stop at the end of the file.
 """
 
+import os
 import cv2
 import numpy as np
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from config.config_manager import config_manager
 from utils.logger import get_logger
@@ -20,55 +30,83 @@ log = get_logger(__name__)
 
 class CameraStream:
     def __init__(self) -> None:
-        self._index = config_manager.get("camera.index", 0)
+        # camera.source wins over camera.index; source may be an int, a file
+        # path, or a stream URL.
+        source = config_manager.get("camera.source", None)
+        if source is None or source == "":
+            source = config_manager.get("camera.index", 0)
+        self._source: Union[int, str] = source
+
         self._width = config_manager.get("camera.width", 1280)
         self._height = config_manager.get("camera.height", 720)
         self._fps = config_manager.get("camera.fps", 30)
         self._timeout_s = config_manager.get("camera.timeout_s", 2.0)
+        self._loop_video = config_manager.get("camera.loop_video", True)
 
         self.max_attempts = config_manager.get("camera.max_reconnect_attempts", 5)
         self.reconnect_delay = config_manager.get("camera.reconnect_delay_s", 1.0)
+
+        # A string source that points to an existing file = recorded video.
+        self._is_file = isinstance(self._source, str) and os.path.isfile(self._source)
+        self._frame_interval = 1.0 / max(self._fps, 1)  # pacing for file playback
 
         self._cap: Optional[cv2.VideoCapture] = None
         self._current_frame: Optional[np.ndarray] = None
         self._frame_lock = threading.Lock()
 
         self._running = False
+        self._ended = False  # True when a non-looping video file reaches its end
         self._thread: Optional[threading.Thread] = None
         self.reconnect_count = 0
 
+    # ── open ──────────────────────────────────────────────────────────────────
+
     def open(self) -> bool:
-        log.info("Opening camera index %d …", self._index)
-        self._cap = cv2.VideoCapture(self._index)
+        log.info("Opening camera source: %s", self._source)
+        self._cap = cv2.VideoCapture(self._source)
 
         if not self._cap.isOpened():
-            log.error("Could not open camera index %d.", self._index)
+            log.error("Could not open camera source: %s", self._source)
             return False
 
-        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
-        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
-        self._cap.set(cv2.CAP_PROP_FPS, self._fps)
+        if self._is_file:
+            # Pace playback to the video's own frame rate for realistic timing.
+            file_fps = self._cap.get(cv2.CAP_PROP_FPS)
+            if file_fps and file_fps > 0:
+                self._frame_interval = 1.0 / file_fps
+            frames = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            log.info(
+                "Playing recorded video (%.1f fps, %d frames, loop=%s).",
+                file_fps or self._fps,
+                frames,
+                self._loop_video,
+            )
+        else:
+            # Live camera — request the configured capture format.
+            self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
+            self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
+            self._cap.set(cv2.CAP_PROP_FPS, self._fps)
 
         ret, frame = self._cap.read()
         if not ret:
-            log.error("Camera opened but failed to read initial frame.")
+            log.error("Source opened but failed to read the first frame.")
             return False
 
         with self._frame_lock:
             self._current_frame = frame
 
-        log.info("Camera %d opened successfully.", self._index)
+        log.info("Camera source opened successfully.")
 
         self._running = True
         self._thread = threading.Thread(
             target=self._update, daemon=True, name="CameraThread"
         )
         self._thread.start()
-
         return True
 
+    # ── reconnect (live cameras / streams only) ───────────────────────────────
+
     def _attempt_reconnect(self) -> bool:
-        """Internal method to recover camera without crashing app."""
         log.warning(
             "Attempting camera reconnect (%d/%d)...",
             self.reconnect_count + 1,
@@ -79,11 +117,12 @@ class CameraStream:
 
         time.sleep(self.reconnect_delay)
 
-        self._cap = cv2.VideoCapture(self._index)
+        self._cap = cv2.VideoCapture(self._source)
         if self._cap.isOpened():
-            self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
-            self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
-            self._cap.set(cv2.CAP_PROP_FPS, self._fps)
+            if not self._is_file:
+                self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
+                self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
+                self._cap.set(cv2.CAP_PROP_FPS, self._fps)
             ret, _ = self._cap.read()
             if ret:
                 log.info("Camera successfully recovered.")
@@ -93,17 +132,20 @@ class CameraStream:
         self.reconnect_count += 1
         return False
 
+    # ── update loop ───────────────────────────────────────────────────────────
+
     def _update(self) -> None:
         last_success = time.time()
 
         while self._running:
             if self._cap is None or not self._cap.isOpened():
-                if self.reconnect_count < self.max_attempts:
+                if not self._is_file and self.reconnect_count < self.max_attempts:
                     self._attempt_reconnect()
                 else:
-                    log.error("Max reconnect attempts reached. Giving up.")
+                    log.error("Camera source unavailable. Stopping.")
                     break
 
+            t0 = time.time()
             ret, frame = self._cap.read()
             now = time.time()
 
@@ -111,17 +153,37 @@ class CameraStream:
                 with self._frame_lock:
                     self._current_frame = frame
                 last_success = now
-            else:
-                elapsed = now - last_success
-                if elapsed > self._timeout_s:
-                    log.error("Camera timeout. Initiating recovery...")
-                    if self.reconnect_count < self.max_attempts:
-                        self._attempt_reconnect()
-                        last_success = time.time()  # reset timer
-                    else:
-                        break
+                # Pace file playback to its native frame rate.
+                if self._is_file:
+                    delay = self._frame_interval - (time.time() - t0)
+                    if delay > 0:
+                        time.sleep(delay)
+                continue
+
+            # ── ret is False ──────────────────────────────────────────────
+            if self._is_file:
+                # End of the video file.
+                if self._loop_video:
+                    self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # rewind & repeat
+                    continue
+                log.info("End of video file reached.")
+                self._ended = True
+                self._running = False
+                break
+
+            # Live camera read failure → timeout / reconnect logic.
+            elapsed = now - last_success
+            if elapsed > self._timeout_s:
+                log.error("Camera timeout. Initiating recovery...")
+                if self.reconnect_count < self.max_attempts:
+                    self._attempt_reconnect()
+                    last_success = time.time()
                 else:
-                    time.sleep(0.1)
+                    break
+            else:
+                time.sleep(0.1)
+
+    # ── lifecycle / read ──────────────────────────────────────────────────────
 
     def release(self) -> None:
         self._running = False
@@ -130,18 +192,21 @@ class CameraStream:
 
         if self._cap is not None and self._cap.isOpened():
             self._cap.release()
-            log.info("Camera %d released.", self._index)
+            log.info("Camera source released.")
         self._cap = None
 
     def read_frame(self) -> Tuple[bool, Optional[np.ndarray]]:
+        # A finished, non-looping video reports no more frames so the main
+        # loop can shut down cleanly.
+        if self._ended:
+            return False, None
         if not self._running:
             return False, None
 
         with self._frame_lock:
             if self._current_frame is not None:
                 return True, self._current_frame.copy()
-            else:
-                return False, None
+            return False, None
 
     def __enter__(self) -> "CameraStream":
         if not self.open():

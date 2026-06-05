@@ -15,6 +15,7 @@ class CameraConfig(BaseModel):
     model_config = {"extra": "allow"}
     index: int = 0
     source: Optional[Union[int, str]] = None
+    loop_video: bool = True  # loop when source is a video file
     width: int = Field(1280, ge=64, le=7680)
     height: int = Field(720, ge=64, le=4320)
     fps: int = Field(30, ge=1, le=240)

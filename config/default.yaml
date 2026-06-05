@@ -4,11 +4,15 @@ robot_id: "robot-0"   # Unique identifier — change per machine in a fleet
 
 camera:
   index: 0
-  # source overrides index — set to a device index (int) or stream URL (string)
+  # source overrides index — set to a device index (int), a VIDEO FILE path,
+  # or a stream URL (string).
   # Examples:
   #   source: 0                               # built-in webcam
+  #   source: "recordings/field_walk.mp4"     # PRE-RECORDED VIDEO FILE
   #   source: "http://192.168.1.5:8080/video" # IP Webcam Android app
   #   source: "http://192.168.1.5:4747/video" # DroidCam Android/iOS
+  # source: "recordings/field_walk.mp4"
+  loop_video: true   # when source is a video file, repeat it on end
   width: 1280
   height: 720
   fps: 30
