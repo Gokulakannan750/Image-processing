@@ -42,6 +42,18 @@ detectors:
     hsv_upper1: [10, 255, 255]
     hsv_lower2: [160, 100, 100]
     hsv_upper2: [180, 255, 255]
+  row_follower:
+    # MARKERLESS navigation: follow the crop rows themselves (no poles/markers).
+    # Recommended for fields with no markers. Turn aruco/pole OFF to use only this.
+    enabled: false
+    exg_threshold: 0.10           # Excess-Green threshold for "this is a plant"
+    near_band_top: 0.55           # steering band (fractions of image height)
+    near_band_bottom: 0.95
+    far_band_top: 0.30            # row-end look-ahead band
+    far_band_bottom: 0.50
+    rowend_veg_min: 0.04          # crop coverage below this ahead = row ended
+    rowend_frames: 5              # consecutive low-crop frames to confirm end
+    path_veg_frac: 0.35           # column < this fraction of peak veg = soil path
   barcode:
     enabled: false
     min_pixel_area: 20000

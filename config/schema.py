@@ -83,11 +83,25 @@ class PoleConfig(BaseModel):
     hsv_upper2: List[int] = Field(default_factory=lambda: [180, 255, 255])
 
 
+class RowFollowerConfig(BaseModel):
+    model_config = {"extra": "allow"}
+    enabled: bool = False
+    exg_threshold: float = Field(0.10, ge=-1.0, le=1.0)
+    near_band_top: float = Field(0.55, ge=0.0, le=1.0)
+    near_band_bottom: float = Field(0.95, ge=0.0, le=1.0)
+    far_band_top: float = Field(0.30, ge=0.0, le=1.0)
+    far_band_bottom: float = Field(0.50, ge=0.0, le=1.0)
+    rowend_veg_min: float = Field(0.04, ge=0.0, le=1.0)
+    rowend_frames: int = Field(5, ge=1)
+    path_veg_frac: float = Field(0.35, ge=0.0, le=1.0)
+
+
 class DetectorsConfig(BaseModel):
     model_config = {"extra": "allow"}
     aruco: ArucoConfig = Field(default_factory=ArucoConfig)
     barcode: BarcodeConfig = Field(default_factory=BarcodeConfig)
     pole: PoleConfig = Field(default_factory=PoleConfig)
+    row_follower: RowFollowerConfig = Field(default_factory=RowFollowerConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     yolo: YoloConfig = Field(default_factory=YoloConfig)
 

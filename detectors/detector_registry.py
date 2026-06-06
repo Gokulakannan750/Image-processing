@@ -54,8 +54,12 @@ def build_detectors_from_config() -> DetectorRegistry:
     from .feature_detector import FeatureDetector
     from .yolo_detector import YoloDetector
     from .pole_detector import PoleDetector
+    from .row_follower import RowFollowerDetector
 
     registry = DetectorRegistry()
+
+    if config_manager.get("detectors.row_follower.enabled", False):
+        registry.register("row_follower", RowFollowerDetector())
 
     if config_manager.get("detectors.aruco.enabled", False):
         registry.register("aruco", ArucoDetector())
