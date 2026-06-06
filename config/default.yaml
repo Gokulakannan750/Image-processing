@@ -43,8 +43,8 @@ detectors:
     hsv_lower2: [160, 100, 100]
     hsv_upper2: [180, 255, 255]
   row_follower:
-    # MARKERLESS navigation: follow the crop rows themselves (no poles/markers).
-    # Recommended for fields with no markers. Turn aruco/pole OFF to use only this.
+    # MARKERLESS navigation for LOW crop rows (bare-soil path between green rows).
+    # For ORCHARDS (grassy alley between tree walls) use 'orchard' below instead.
     enabled: false
     exg_threshold: 0.10           # Excess-Green threshold for "this is a plant"
     near_band_top: 0.55           # steering band (fractions of image height)
@@ -54,6 +54,25 @@ detectors:
     rowend_veg_min: 0.04          # crop coverage below this ahead = row ended
     rowend_frames: 5              # consecutive low-crop frames to confirm end
     path_veg_frac: 0.35           # column < this fraction of peak veg = soil path
+  orchard:
+    # MARKERLESS ORCHARD follower (validated on real apple-orchard video).
+    # Finds the grassy alley as the gap between the dark, TEXTURED tree walls.
+    # Use this for orchards/vineyards; turn aruco/pole/row_follower OFF.
+    enabled: false
+    work_width: 320               # downsample width for speed
+    green_exg_min: 0.02           # min greenness to be considered foliage
+    tree_texture_pct: 52          # texture percentile above which = tree wall
+    tree_texture_abs_min: 6.0     # absolute texture floor (smooth field != wall)
+    near_band_top: 0.60           # steering band (fractions of image height)
+    near_band_bottom: 0.92
+    lookahead_top: 0.45           # row-end look-ahead band
+    lookahead_bottom: 0.65
+    scan_top: 0.45                # vertical scan range for the centreline
+    scan_bottom: 0.92
+    ema_alpha: 0.4                # output centre smoothing (0=smooth,1=instant)
+    rowend_wall_min: 0.25         # <this fraction of look-ahead rows w/ both
+                                  # walls => row ending
+    rowend_frames: 6              # consecutive frames to confirm row end
   barcode:
     enabled: false
     min_pixel_area: 20000

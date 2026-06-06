@@ -61,6 +61,11 @@ def build_detectors_from_config() -> DetectorRegistry:
     if config_manager.get("detectors.row_follower.enabled", False):
         registry.register("row_follower", RowFollowerDetector())
 
+    if config_manager.get("detectors.orchard.enabled", False):
+        from .orchard_follower import OrchardFollowerDetector
+
+        registry.register("orchard", OrchardFollowerDetector())
+
     if config_manager.get("detectors.aruco.enabled", False):
         registry.register("aruco", ArucoDetector())
 

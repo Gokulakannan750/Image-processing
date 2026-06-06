@@ -96,12 +96,31 @@ class RowFollowerConfig(BaseModel):
     path_veg_frac: float = Field(0.35, ge=0.0, le=1.0)
 
 
+class OrchardConfig(BaseModel):
+    model_config = {"extra": "allow"}
+    enabled: bool = False
+    work_width: int = Field(320, ge=120, le=1920)
+    green_exg_min: float = Field(0.02, ge=-1.0, le=1.0)
+    tree_texture_pct: float = Field(52, ge=0, le=100)
+    tree_texture_abs_min: float = Field(6.0, ge=0.0)
+    near_band_top: float = Field(0.60, ge=0.0, le=1.0)
+    near_band_bottom: float = Field(0.92, ge=0.0, le=1.0)
+    lookahead_top: float = Field(0.45, ge=0.0, le=1.0)
+    lookahead_bottom: float = Field(0.65, ge=0.0, le=1.0)
+    scan_top: float = Field(0.45, ge=0.0, le=1.0)
+    scan_bottom: float = Field(0.92, ge=0.0, le=1.0)
+    ema_alpha: float = Field(0.4, ge=0.0, le=1.0)
+    rowend_wall_min: float = Field(0.25, ge=0.0, le=1.0)
+    rowend_frames: int = Field(6, ge=1)
+
+
 class DetectorsConfig(BaseModel):
     model_config = {"extra": "allow"}
     aruco: ArucoConfig = Field(default_factory=ArucoConfig)
     barcode: BarcodeConfig = Field(default_factory=BarcodeConfig)
     pole: PoleConfig = Field(default_factory=PoleConfig)
     row_follower: RowFollowerConfig = Field(default_factory=RowFollowerConfig)
+    orchard: OrchardConfig = Field(default_factory=OrchardConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     yolo: YoloConfig = Field(default_factory=YoloConfig)
 
