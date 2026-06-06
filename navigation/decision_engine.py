@@ -20,6 +20,8 @@ from navigation.vehicle_state import VehicleStateMachine, State
 from navigation.recovery_manager import RecoveryManager
 from navigation.navigation_filter import NavigationFilter
 from navigation.row_tracker import RowTracker
+from navigation.global_planner import GlobalPlanner
+from sensors.gps_receiver import GPSReceiver
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -35,13 +37,32 @@ class DecisionEngine:
         self.recovery_manager = RecoveryManager(self.state_machine)
         self.nav_filter = NavigationFilter()
         self.row_tracker = RowTracker()
+
+        # New components for Global Navigation
+        self.global_planner = GlobalPlanner()
+        self.gps_receiver = GPSReceiver()
+        # Mock load map and generate path
+        self.global_planner.load_farm_map("farm_map.json")
+        self.global_planner.generate_vacuum_path()
+
         self._obstacle_blocked: bool = False
 
     def process_detection(self, result: DetectionResult) -> Tuple[State, float]:
         """
         Takes the DetectionResult from the Vision Pipeline and decides on navigation.
+        Also uses GPS location and Global Planner to determine global waypoints.
         Returns the current vehicle state and the smoothed steering correction.
         """
+        # Fetch latest GPS reading
+        gps = self.gps_receiver.get_latest_reading()
+        if gps.is_valid:
+            local_pos = self.gps_receiver.latlon_to_local(gps.latitude, gps.longitude)
+            if local_pos:
+                dist_to_wp = self.global_planner.distance_to_waypoint(
+                    local_pos[0], local_pos[1]
+                )
+                if dist_to_wp < 1.0:  # Within 1 meter of waypoint
+                    self.global_planner.advance_waypoint()
         # If the field is already finished, stay stopped — nothing more to do.
         if self.row_tracker.is_finished():
             return self.state_machine.current_state, 0.0

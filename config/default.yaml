@@ -21,6 +21,9 @@ camera:
   reconnect_delay_s: 1.0
 
 detectors:
+  # NEW ARCHITECTURE: a red 1-metre pole at each row end is detected by the
+  # 'pole' detector below (no printed ArUco/QR/barcode needed). To use poles
+  # ONLY, set aruco.enabled: false. They can also run together.
   aruco:
     enabled: true
     dictionary: "DICT_6X6_250"
@@ -30,6 +33,15 @@ detectors:
     turn_trigger_distance_m: 1.5
     camera_matrix: [[800, 0, 640], [0, 800, 360], [0, 0, 1]]
     dist_coeffs: [[0, 0, 0, 0]]
+  pole:
+    enabled: true                 # detect red 1 m poles at row ends
+    width_m: 0.10                 # real pole width (m) for distance estimate
+    turn_trigger_distance_m: 1.5  # fire the U-turn at this distance
+    # HSV colour range for red (red wraps the hue cylinder, so two ranges):
+    hsv_lower1: [0, 100, 100]
+    hsv_upper1: [10, 255, 255]
+    hsv_lower2: [160, 100, 100]
+    hsv_upper2: [180, 255, 255]
   barcode:
     enabled: false
     min_pixel_area: 20000

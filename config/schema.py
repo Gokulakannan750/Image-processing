@@ -72,10 +72,22 @@ class YoloConfig(BaseModel):
         return v
 
 
+class PoleConfig(BaseModel):
+    model_config = {"extra": "allow"}
+    enabled: bool = True
+    width_m: float = Field(0.10, gt=0)
+    turn_trigger_distance_m: float = Field(1.5, gt=0)
+    hsv_lower1: List[int] = Field(default_factory=lambda: [0, 100, 100])
+    hsv_upper1: List[int] = Field(default_factory=lambda: [10, 255, 255])
+    hsv_lower2: List[int] = Field(default_factory=lambda: [160, 100, 100])
+    hsv_upper2: List[int] = Field(default_factory=lambda: [180, 255, 255])
+
+
 class DetectorsConfig(BaseModel):
     model_config = {"extra": "allow"}
     aruco: ArucoConfig = Field(default_factory=ArucoConfig)
     barcode: BarcodeConfig = Field(default_factory=BarcodeConfig)
+    pole: PoleConfig = Field(default_factory=PoleConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     yolo: YoloConfig = Field(default_factory=YoloConfig)
 

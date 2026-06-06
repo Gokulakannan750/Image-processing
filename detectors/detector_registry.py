@@ -53,6 +53,7 @@ def build_detectors_from_config() -> DetectorRegistry:
     from .barcode_detector import BarcodeDetector
     from .feature_detector import FeatureDetector
     from .yolo_detector import YoloDetector
+    from .pole_detector import PoleDetector
 
     registry = DetectorRegistry()
 
@@ -67,6 +68,9 @@ def build_detectors_from_config() -> DetectorRegistry:
 
     if config_manager.get("detectors.yolo.enabled", False):
         registry.register("yolo", YoloDetector())
+
+    if config_manager.get("detectors.pole.enabled", True):  # Default to True for new architecture
+        registry.register("pole", PoleDetector())
 
     if registry.is_empty():
         log.warning("No detectors enabled in configuration!")
