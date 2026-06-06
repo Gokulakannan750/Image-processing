@@ -59,6 +59,14 @@ class YoloDetector(BaseDetector):
             "detectors.yolo.danger_zone_ratio", 0.12
         )
         self._device = config_manager.get("detectors.yolo.device", "cpu")
+        # Path-ahead region of interest. An obstacle only triggers a STOP if its
+        # centre falls inside this central corridor — so a person/bicycle off on
+        # the adjacent road is detected (orange) but does NOT stop the machine.
+        # Fractions of frame width/height. roi_enabled=False = whole frame.
+        self._roi_enabled = config_manager.get("detectors.yolo.roi_enabled", True)
+        self._roi_half_w = config_manager.get("detectors.yolo.roi_half_width", 0.28)
+        self._roi_top = config_manager.get("detectors.yolo.roi_top", 0.40)
+        self._roi_bottom = config_manager.get("detectors.yolo.roi_bottom", 1.0)
         self._faulted = False  # True → inference disabled, return empty results
         self._consecutive_errors = 0
 
@@ -177,6 +185,19 @@ class YoloDetector(BaseDetector):
                     self._faulted = True
                     self._running = False
 
+    def _in_roi(self, x1: int, y1: int, x2: int, y2: int, w: int, h: int) -> bool:
+        """True if the bbox is inside the path-ahead corridor (centre in the
+        central x-band and reaching into the lower band). If ROI is disabled,
+        everything counts as in-path (whole-frame behaviour)."""
+        if not self._roi_enabled:
+            return True
+        cx = (x1 + x2) / 2.0
+        left = (0.5 - self._roi_half_w) * w
+        right = (0.5 + self._roi_half_w) * w
+        in_x = left <= cx <= right
+        in_y = y2 >= self._roi_top * h and y1 <= self._roi_bottom * h
+        return in_x and in_y
+
     def _run_inference(self, frame: np.ndarray) -> List[ObstacleDetection]:
         if self._model is None:
             return []
@@ -202,7 +223,9 @@ class YoloDetector(BaseDetector):
                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
                 conf = float(box.conf[0])
                 bbox_area = max((x2 - x1) * (y2 - y1), 0)
-                is_critical = (bbox_area / frame_area) >= self._danger_ratio
+                big_enough = (bbox_area / frame_area) >= self._danger_ratio
+                in_path = self._in_roi(x1, y1, x2, y2, w, h)
+                is_critical = big_enough and in_path
                 obstacles.append(
                     ObstacleDetection(
                         label=self._class_names[cls_id],
@@ -246,6 +269,19 @@ class YoloDetector(BaseDetector):
     def _draw_obstacles(
         self, frame: np.ndarray, obstacles: List[ObstacleDetection]
     ) -> None:
+        # Draw the path-ahead STOP zone (only obstacles inside it can stop us).
+        if self._roi_enabled:
+            h, w = frame.shape[:2]
+            lx = int((0.5 - self._roi_half_w) * w)
+            rx = int((0.5 + self._roi_half_w) * w)
+            ty = int(self._roi_top * h)
+            by = int(self._roi_bottom * h) - 1
+            cv2.rectangle(frame, (lx, ty), (rx, by), (180, 180, 60), 1)
+            cv2.putText(
+                frame, "STOP ZONE", (lx + 4, ty + 16),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 60), 1,
+            )
+
         for obs in obstacles:
             x1, y1, x2, y2 = obs.bbox
             color = (0, 0, 255) if obs.is_critical else (0, 140, 255)

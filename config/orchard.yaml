@@ -50,6 +50,12 @@ detectors:
     confidence: 0.40        # min confidence to report an obstacle
     danger_zone_ratio: 0.12 # obstacle bbox >= 12% of frame -> STOP
     device: "cpu"
+    # Only obstacles in the PATH AHEAD (central corridor) trigger a STOP.
+    # Roadside people/bikes are still detected (orange) but don't stop us.
+    roi_enabled: true
+    roi_half_width: 0.28    # central +/-28% of width = the alley corridor
+    roi_top: 0.40           # ignore the far/top of the frame
+    roi_bottom: 1.0
 
 navigation:
   turn_cooldown_s: 10.0

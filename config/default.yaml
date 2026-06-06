@@ -86,6 +86,13 @@ detectors:
     confidence: 0.50           # minimum detection confidence
     danger_zone_ratio: 0.12    # bbox/frame area fraction that triggers E-STOP
     device: "cpu"              # "cpu", "cuda", or "mps"
+    # Path-ahead STOP zone: only obstacles whose centre is in this central
+    # corridor (and big enough) trigger a STOP. Roadside obstacles are still
+    # detected but won't stop the machine. Set roi_enabled:false for whole-frame.
+    roi_enabled: true
+    roi_half_width: 0.28       # central +/-28% of frame width
+    roi_top: 0.40              # ignore far/top of the frame
+    roi_bottom: 1.0
 
 navigation:
   turn_cooldown_s: 10.0

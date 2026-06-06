@@ -60,6 +60,11 @@ class YoloConfig(BaseModel):
     confidence: float = Field(0.50, ge=0.0, le=1.0)
     danger_zone_ratio: float = Field(0.12, ge=0.0, le=1.0)
     device: str = "cpu"
+    # Path-ahead region of interest for the STOP decision.
+    roi_enabled: bool = True
+    roi_half_width: float = Field(0.28, ge=0.0, le=0.5)
+    roi_top: float = Field(0.40, ge=0.0, le=1.0)
+    roi_bottom: float = Field(1.0, ge=0.0, le=1.0)
 
     @field_validator("device")
     @classmethod
