@@ -1,0 +1,71 @@
+# Orchard test configuration
+# ===========================
+# Markerless ORCHARD navigation + obstacle detection, for testing on video.
+#   - orchard follower ON  (steer the grassy alley, detect row ends)
+#   - YOLO obstacle detection ON  (person / vehicle / animal -> STOP)
+#   - ArUco / pole / barcode / feature OFF (no markers in this field)
+#
+# Run:
+#   python main.py --video <your_video.mp4> --config config/orchard.yaml
+# or drag a video onto tools/Test_Orchard_Video.bat
+
+robot_id: "orchard-test"
+
+camera:
+  index: 0
+  loop_video: true
+  width: 1280
+  height: 720
+  fps: 30
+
+detectors:
+  aruco:
+    enabled: false
+  barcode:
+    enabled: false
+  feature:
+    enabled: false
+  pole:
+    enabled: false
+  row_follower:
+    enabled: false
+  orchard:
+    enabled: true
+    work_width: 320
+    green_exg_min: 0.02
+    tree_texture_pct: 52
+    tree_texture_abs_min: 6.0
+    near_band_top: 0.60
+    near_band_bottom: 0.92
+    lookahead_top: 0.45
+    lookahead_bottom: 0.65
+    scan_top: 0.45
+    scan_bottom: 0.92
+    ema_alpha: 0.4
+    rowend_wall_min: 0.25
+    rowend_frames: 6
+  yolo:
+    enabled: true          # obstacle detection
+    model: "yolov8n.pt"
+    confidence: 0.40        # min confidence to report an obstacle
+    danger_zone_ratio: 0.12 # obstacle bbox >= 12% of frame -> STOP
+    device: "cpu"
+
+navigation:
+  turn_cooldown_s: 10.0
+  smoothing_alpha: 0.3
+  dead_zone_x: 20
+  recovery_timeout_s: 2.0
+  min_state_duration_s: 0.5
+
+safety:
+  max_stale_frame_ms: 1500
+  enable_auto_recovery: true
+
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 5000
+
+recording:
+  enabled: false
