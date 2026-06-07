@@ -34,6 +34,10 @@ _OBSTACLE_CLASSES = {
     17: "horse",
     18: "sheep",
     19: "cow",
+    # Objects that may be left in the alley (bags, cases on the ground)
+    24: "backpack",
+    26: "handbag",
+    28: "suitcase",
 }
 
 
@@ -67,6 +71,18 @@ class YoloDetector(BaseDetector):
         self._roi_half_w = config_manager.get("detectors.yolo.roi_half_width", 0.28)
         self._roi_top = config_manager.get("detectors.yolo.roi_top", 0.40)
         self._roi_bottom = config_manager.get("detectors.yolo.roi_bottom", 1.0)
+        # Safety-critical classes (people, animals): STOP for these in the path
+        # even when small/far — you must never drive toward a person. They use a
+        # much smaller size threshold than vehicles/objects.
+        self._priority_classes = set(
+            config_manager.get(
+                "detectors.yolo.priority_classes",
+                ["person", "cat", "dog", "horse", "sheep", "cow"],
+            )
+        )
+        self._priority_min_ratio = config_manager.get(
+            "detectors.yolo.priority_min_ratio", 0.015
+        )
         self._faulted = False  # True → inference disabled, return empty results
         self._consecutive_errors = 0
 
@@ -222,13 +238,19 @@ class YoloDetector(BaseDetector):
                     continue
                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
                 conf = float(box.conf[0])
-                bbox_area = max((x2 - x1) * (y2 - y1), 0)
-                big_enough = (bbox_area / frame_area) >= self._danger_ratio
+                label = self._class_names[cls_id]
+                area_ratio = max((x2 - x1) * (y2 - y1), 0) / frame_area
                 in_path = self._in_roi(x1, y1, x2, y2, w, h)
-                is_critical = big_enough and in_path
+                # People/animals: stop even when small/far. Others: only close.
+                min_ratio = (
+                    self._priority_min_ratio
+                    if label in self._priority_classes
+                    else self._danger_ratio
+                )
+                is_critical = in_path and area_ratio >= min_ratio
                 obstacles.append(
                     ObstacleDetection(
-                        label=self._class_names[cls_id],
+                        label=label,
                         confidence=conf,
                         bbox=(x1, y1, x2, y2),
                         class_id=cls_id,

@@ -65,6 +65,11 @@ class YoloConfig(BaseModel):
     roi_half_width: float = Field(0.28, ge=0.0, le=0.5)
     roi_top: float = Field(0.40, ge=0.0, le=1.0)
     roi_bottom: float = Field(1.0, ge=0.0, le=1.0)
+    # Safety-critical classes that STOP even when small/far (in the path).
+    priority_classes: List[str] = Field(
+        default_factory=lambda: ["person", "cat", "dog", "horse", "sheep", "cow"]
+    )
+    priority_min_ratio: float = Field(0.015, ge=0.0, le=1.0)
 
     @field_validator("device")
     @classmethod

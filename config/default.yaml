@@ -93,6 +93,11 @@ detectors:
     roi_half_width: 0.28       # central +/-28% of frame width
     roi_top: 0.40              # ignore far/top of the frame
     roi_bottom: 1.0
+    # People & animals in the path STOP the machine even when far/small
+    # (you must never drive toward a person). Vehicles/objects use the
+    # larger danger_zone_ratio above.
+    priority_classes: ["person", "cat", "dog", "horse", "sheep", "cow"]
+    priority_min_ratio: 0.015  # >=1.5% of frame triggers STOP for the above
 
 navigation:
   turn_cooldown_s: 10.0

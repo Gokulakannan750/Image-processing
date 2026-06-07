@@ -56,6 +56,9 @@ detectors:
     roi_half_width: 0.28    # central +/-28% of width = the alley corridor
     roi_top: 0.40           # ignore the far/top of the frame
     roi_bottom: 1.0
+    # People & animals in the path STOP the machine even when far/small.
+    priority_classes: ["person", "cat", "dog", "horse", "sheep", "cow"]
+    priority_min_ratio: 0.015  # >=1.5% of frame (much smaller than 12%)
 
 navigation:
   turn_cooldown_s: 10.0
