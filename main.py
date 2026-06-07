@@ -33,7 +33,10 @@ from safety.safety_monitor import SafetyMonitor  # noqa: E402
 from vision.frame_pipeline import FramePipeline  # noqa: E402
 from recording.data_recorder import DataRecorder  # noqa: E402
 from recording.replay_system import ReplayCameraStream  # noqa: E402
-from simulation.synthetic_environment import SyntheticEnvironment  # noqa: E402
+from simulation.synthetic_environment import (  # noqa: E402
+    SyntheticEnvironment,
+    OrchardSyntheticEnvironment,
+)
 from testing.stress_test import StressTestSimulator  # noqa: E402
 from testing.report_generator import ReportGenerator  # noqa: E402
 from dashboard.server import dashboard_state  # noqa: E402
@@ -157,9 +160,17 @@ def main() -> None:
         fps = config_manager.get("camera.fps", 30)
         camera = ReplayCameraStream(args.replay, fps=fps, speed=args.speed)
     elif args.simulate:
-        log.info("STARTING IN SYNTHETIC SIMULATION MODE")
         fps = config_manager.get("camera.fps", 30)
-        camera = SyntheticEnvironment(fps=fps)
+        # Markerless config (orchard/pole) -> orchard alley sim; else ArUco sim.
+        if config_manager.get("detectors.orchard.enabled", False) or (
+            config_manager.get("detectors.pole.enabled", False)
+            and not config_manager.get("detectors.aruco.enabled", False)
+        ):
+            log.info("STARTING IN SYNTHETIC SIMULATION MODE (orchard)")
+            camera = OrchardSyntheticEnvironment(fps=fps)
+        else:
+            log.info("STARTING IN SYNTHETIC SIMULATION MODE (aruco)")
+            camera = SyntheticEnvironment(fps=fps)
     else:
         log.info("STARTING LIVE CAMERA STREAM")
         camera = CameraStream()
