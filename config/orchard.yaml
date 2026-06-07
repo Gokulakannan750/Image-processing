@@ -73,7 +73,8 @@ detectors:
     hist_bins: 24
     min_ground_prob: 0.001   # colour rarer than this in ground = anomaly
     dark_margin: 28.0        # also flag patches this much darker than ground
-    min_area_frac: 0.012     # blob this big (of corridor) = report it
+    achroma_max: 4.0         # flag near-grey patches (rock/concrete/box)
+    min_area_frac: 0.008     # blob this big (of corridor) = report it
     stop_area_frac: 0.020    # blob this big = STOP
     solidity_min: 0.45       # reject scattered grass speckle
     confirm_frames: 2        # consecutive hits before stopping

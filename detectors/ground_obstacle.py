@@ -65,6 +65,11 @@ class GroundObstacleDetector(BaseDetector):
         # we also flag pixels far below the ground's brightness. Set
         # dark_margin very high to disable.
         self._dark_margin = float(config_manager.get(c + "dark_margin", 28.0))
+        # "Too grey for ground" term: grass and soil both carry real colour
+        # (chroma); a rock, concrete block, cardboard box or weathered plank is
+        # nearly grey (very low chroma). So a patch far less colourful than the
+        # ground is flagged. Only applied when the ground itself is colourful.
+        self._achroma_max = float(config_manager.get(c + "achroma_max", 12.0))
         # Blob size (fraction of the corridor area) to report / to STOP.
         self._min_area_frac = float(config_manager.get(c + "min_area_frac", 0.012))
         self._stop_area_frac = float(config_manager.get(c + "stop_area_frac", 0.020))
@@ -90,6 +95,11 @@ class GroundObstacleDetector(BaseDetector):
         self._ground_L_lo = float(np.percentile(ref[:, :, 0], 5))
         a = ref[:, :, 1].reshape(-1)
         b = ref[:, :, 2].reshape(-1)
+        # Typical colourfulness of the ground (median chroma) for the grey term.
+        self._ground_chroma = float(
+            np.median(np.hypot(a.astype(np.float32) - 128.0,
+                               b.astype(np.float32) - 128.0))
+        )
         hist = cv2.calcHist(
             [a.astype(np.float32), b.astype(np.float32)],
             [0, 1], None, [self._bins, self._bins],
@@ -116,7 +126,17 @@ class GroundObstacleDetector(BaseDetector):
         # Darkness anomaly: much darker than the ground reference.
         L = sub[:, :, 0].astype(np.float32)
         dark_anom = L < (getattr(self, "_ground_L_lo", 0.0) - self._dark_margin)
-        mask = (np.logical_or(chroma_anom, dark_anom)).astype(np.uint8) * 255
+        # "Too grey" anomaly: far less colourful than the ground (rock, box,
+        # concrete, weathered wood). Only when the ground is itself colourful,
+        # so a naturally grey/gravel path doesn't trip it.
+        chroma_px = np.hypot(sub[:, :, 1].astype(np.float32) - 128.0,
+                             sub[:, :, 2].astype(np.float32) - 128.0)
+        ground_chroma = getattr(self, "_ground_chroma", 0.0)
+        if ground_chroma > self._achroma_max * 1.6:
+            grey_anom = chroma_px < self._achroma_max
+        else:
+            grey_anom = np.zeros_like(dark_anom)
+        mask = (chroma_anom | dark_anom | grey_anom).astype(np.uint8) * 255
         # Clean: drop grass speckle, then fill object interiors.
         k_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
