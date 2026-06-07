@@ -117,21 +117,23 @@ class YoloDetector(BaseDetector):
             self._start_dummy_thread()
             return
 
-        # If the model has its own class names (custom trained), use them.
-        # Otherwise fall back to the hardcoded COCO obstacle subset.
+        # Use the model's own class names when present (both the pretrained COCO
+        # model and any custom-trained model expose .names). We deliberately do
+        # NOT filter to a fixed subset: detecting every class the model knows
+        # means more objects in the path can stop the machine. Safety-critical
+        # vs. ordinary classes are handled later via priority_classes.
         if hasattr(self._model, "names") and self._model.names:
             self._class_names = self._model.names
             self._filter_classes = None
             log.info(
-                "Custom model loaded with %d classes: %s",
-                len(self._class_names),
-                list(self._class_names.values()),
+                "YOLO model loaded with %d classes.", len(self._class_names)
             )
         else:
+            # Fallback for an unusual model with no embedded names.
             self._class_names = _OBSTACLE_CLASSES
             self._filter_classes = list(_OBSTACLE_CLASSES.keys())
             log.info(
-                "Using pretrained COCO model — filtering to %d obstacle classes.",
+                "Model has no class names — using %d-class obstacle fallback.",
                 len(self._filter_classes),
             )
 

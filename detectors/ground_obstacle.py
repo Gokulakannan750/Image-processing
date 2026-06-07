@@ -50,7 +50,7 @@ class GroundObstacleDetector(BaseDetector):
         self._work_w = int(config_manager.get(c + "work_width", 320))
         # Path-ahead corridor (fractions of frame), same idea as the YOLO ROI.
         self._half_w = float(config_manager.get(c + "roi_half_width", 0.30))
-        self._eval_top = float(config_manager.get(c + "eval_top", 0.45))
+        self._eval_top = float(config_manager.get(c + "eval_top", 0.52))
         self._eval_bottom = float(config_manager.get(c + "eval_bottom", 0.90))
         # Ground-reference band (just in front of the machine = assumed clear).
         self._ref_top = float(config_manager.get(c + "ref_top", 0.80))
@@ -58,7 +58,7 @@ class GroundObstacleDetector(BaseDetector):
         # Colour model + anomaly thresholds.
         self._bins = int(config_manager.get(c + "hist_bins", 24))
         self._min_ground_prob = float(
-            config_manager.get(c + "min_ground_prob", 0.004)
+            config_manager.get(c + "min_ground_prob", 0.001)
         )
         # Darkness term: an object much darker than the ground (a dark bag/crate
         # in sun) has near-neutral chroma that blends with the colour model, so
@@ -69,14 +69,17 @@ class GroundObstacleDetector(BaseDetector):
         # (chroma); a rock, concrete block, cardboard box or weathered plank is
         # nearly grey (very low chroma). So a patch far less colourful than the
         # ground is flagged. Only applied when the ground itself is colourful.
-        self._achroma_max = float(config_manager.get(c + "achroma_max", 12.0))
+        self._achroma_max = float(config_manager.get(c + "achroma_max", 4.0))
         # Blob size (fraction of the corridor area) to report / to STOP.
-        self._min_area_frac = float(config_manager.get(c + "min_area_frac", 0.012))
+        self._min_area_frac = float(config_manager.get(c + "min_area_frac", 0.008))
         self._stop_area_frac = float(config_manager.get(c + "stop_area_frac", 0.020))
         self._solidity_min = float(config_manager.get(c + "solidity_min", 0.45))
         # Need a few consecutive hits before stopping (debounce flicker).
         self._confirm_frames = int(config_manager.get(c + "confirm_frames", 2))
         self._hit_streak = 0
+        # Ground statistics, recomputed each frame in _build_ground_model.
+        self._ground_L_lo = 0.0       # brightness floor of the ground
+        self._ground_chroma = 0.0     # typical colourfulness of the ground
 
     # ------------------------------------------------------------------
     def _corridor_x(self, w: int) -> Tuple[int, int]:
@@ -125,14 +128,13 @@ class GroundObstacleDetector(BaseDetector):
         chroma_anom = prob < self._min_ground_prob
         # Darkness anomaly: much darker than the ground reference.
         L = sub[:, :, 0].astype(np.float32)
-        dark_anom = L < (getattr(self, "_ground_L_lo", 0.0) - self._dark_margin)
+        dark_anom = L < (self._ground_L_lo - self._dark_margin)
         # "Too grey" anomaly: far less colourful than the ground (rock, box,
         # concrete, weathered wood). Only when the ground is itself colourful,
         # so a naturally grey/gravel path doesn't trip it.
         chroma_px = np.hypot(sub[:, :, 1].astype(np.float32) - 128.0,
                              sub[:, :, 2].astype(np.float32) - 128.0)
-        ground_chroma = getattr(self, "_ground_chroma", 0.0)
-        if ground_chroma > self._achroma_max * 1.6:
+        if self._ground_chroma > self._achroma_max * 1.6:
             grey_anom = chroma_px < self._achroma_max
         else:
             grey_anom = np.zeros_like(dark_anom)
@@ -167,9 +169,9 @@ class GroundObstacleDetector(BaseDetector):
 
         cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         inv = 1.0 / scale  # map small-frame coords back to full frame
-        biggest_frac = 0.0
         critical_now = False
         obstacles: List[ObstacleDetection] = []
+        big_flags: List[bool] = []  # per-blob: large enough to STOP
 
         for cnt in cnts:
             area = cv2.contourArea(cnt)
@@ -185,9 +187,9 @@ class GroundObstacleDetector(BaseDetector):
             # Back to small-frame absolute coords (corridor offset + eval offset)
             ax1, ay1 = lx + bx, ey1 + by
             ax2, ay2 = ax1 + bw, ay1 + bh
-            is_crit = frac >= self._stop_area_frac
-            critical_now = critical_now or is_crit
-            biggest_frac = max(biggest_frac, frac)
+            is_big = frac >= self._stop_area_frac
+            critical_now = critical_now or is_big
+            big_flags.append(is_big)
             obstacles.append(
                 ObstacleDetection(
                     label="object",
@@ -199,24 +201,20 @@ class GroundObstacleDetector(BaseDetector):
                 )
             )
 
-        # Debounce: only declare critical after N consecutive critical frames.
-        if critical_now:
-            self._hit_streak += 1
-        else:
-            self._hit_streak = 0
-        confirmed = self._hit_streak >= self._confirm_frames
-        if confirmed:
-            for o in obstacles:
-                if (o.bbox[2] - o.bbox[0]) * (o.bbox[3] - o.bbox[1]) > 0:
-                    o.is_critical = True
+        # Debounce: only after N consecutive frames with a big-enough blob do we
+        # mark the big blob(s) critical (small "object?" blobs stay non-critical).
+        self._hit_streak = self._hit_streak + 1 if critical_now else 0
+        if self._hit_streak >= self._confirm_frames:
+            for obs, is_big in zip(obstacles, big_flags):
+                obs.is_critical = is_big
 
         result.obstacles = obstacles
-        self._draw(frame, obstacles, confirmed, biggest_frac)
+        self._draw(frame, obstacles)
         return frame, result
 
     # ------------------------------------------------------------------
-    def _draw(self, frame: np.ndarray, obstacles: List[ObstacleDetection],
-              confirmed: bool, biggest_frac: float) -> None:
+    def _draw(self, frame: np.ndarray,
+              obstacles: List[ObstacleDetection]) -> None:
         for o in obstacles:
             x1, y1, x2, y2 = o.bbox
             crit = o.is_critical

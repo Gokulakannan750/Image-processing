@@ -22,7 +22,7 @@ Output: one DetectionTarget (center_x = alley centre, is_turn_trigger = row
 end), so it plugs into the existing steering / turn logic unchanged.
 """
 
-from typing import Tuple
+from typing import Optional, Tuple
 import time
 
 import cv2
@@ -57,7 +57,7 @@ class OrchardFollowerDetector(BaseDetector):
         self.rowend_wall_min = config_manager.get(c + "rowend_wall_min", 0.25)
         self.rowend_frames = int(config_manager.get(c + "rowend_frames", 6))
 
-        self._ema_cx = None  # smoothed centre (in working-image px)
+        self._ema_cx: Optional[float] = None  # smoothed centre (working-image px)
         self._rowend_counter = 0
         log.info(
             "OrchardFollowerDetector ready (work_width=%d, tex_pct=%d).",
