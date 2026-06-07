@@ -18,10 +18,14 @@ echo.
 echo  - A window will open showing the video with detections.
 echo  - Open  http://localhost:5000  in a browser for the dashboard.
 echo  - Press Q in the video window to stop.
+echo.
+echo  NOTE: This now uses the SAME fast orchard config as
+echo        Test_Orchard_Video.bat (markerless + obstacle + smooth FPS).
+echo        For marker/ArUco mode run:  python main.py --video yourfile.mp4
 echo ===========================================================
 echo.
 
-python main.py --video "%video%"
+python main.py --video "%video%" --config config/orchard.yaml
 goto :done
 
 :novideo
