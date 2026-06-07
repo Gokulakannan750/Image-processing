@@ -36,7 +36,19 @@ detectors:
   feature:
     enabled: false
   pole:
-    enabled: false
+    # Red 1 m poles at the row ends trigger the U-turn when within
+    # turn_trigger_distance_m. Markerless row-end (orchard, below) stays ON as a
+    # backup, so the machine still turns even if no pole is seen.
+    # KEEP POLES ON THE SIDES of the alley so the obstacle detector ignores them.
+    # NOTE: the trigger distance is only accurate after camera calibration
+    # (tools/calibrate_camera.py); otherwise it is a rough estimate.
+    enabled: true
+    width_m: 0.10                 # real pole width (m) for distance estimate
+    turn_trigger_distance_m: 1.5  # fire the U-turn at this distance
+    hsv_lower1: [0, 100, 100]
+    hsv_upper1: [10, 255, 255]
+    hsv_lower2: [160, 100, 100]
+    hsv_upper2: [180, 255, 255]
   row_follower:
     enabled: false
   orchard:
