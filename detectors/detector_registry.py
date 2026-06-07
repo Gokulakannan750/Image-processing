@@ -78,6 +78,11 @@ def build_detectors_from_config() -> DetectorRegistry:
     if config_manager.get("detectors.yolo.enabled", False):
         registry.register("yolo", YoloDetector())
 
+    if config_manager.get("detectors.ground_obstacle.enabled", False):
+        from .ground_obstacle import GroundObstacleDetector
+
+        registry.register("ground_obstacle", GroundObstacleDetector())
+
     if config_manager.get("detectors.pole.enabled", True):  # Default to True for new architecture
         registry.register("pole", PoleDetector())
 

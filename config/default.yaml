@@ -98,6 +98,26 @@ detectors:
     # larger danger_zone_ratio above.
     priority_classes: ["person", "cat", "dog", "horse", "sheep", "cow"]
     priority_min_ratio: 0.015  # >=1.5% of frame triggers STOP for the above
+  ground_obstacle:
+    # GENERIC obstacle detector (software stand-in for LiDAR). Stops for ANY
+    # object in the alley ahead, including ones YOLO cannot recognise (bags,
+    # crates, rocks, branches). Learns the grass/soil ground in front of the
+    # machine and flags anything ahead that doesn't match. Off by default —
+    # enable per field and tune the thresholds. Errs toward stopping.
+    enabled: false
+    work_width: 320
+    roi_half_width: 0.30     # central corridor (the alley ahead)
+    eval_top: 0.60           # search band top (far)
+    eval_bottom: 0.90        # search band bottom (near)
+    ref_top: 0.80            # learn "ground" appearance from this near band
+    ref_bottom: 0.98
+    hist_bins: 24
+    min_ground_prob: 0.001   # colour rarer than this in the ground = anomaly
+    dark_margin: 28.0        # also flag patches this much darker than ground
+    min_area_frac: 0.012     # min blob size (fraction of corridor) to report
+    stop_area_frac: 0.020    # blob this big in the path = STOP
+    solidity_min: 0.45       # reject scattered grass/leaf speckle
+    confirm_frames: 2        # consecutive critical frames before stopping
 
 navigation:
   turn_cooldown_s: 10.0

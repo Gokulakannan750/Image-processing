@@ -59,6 +59,24 @@ detectors:
     # People & animals in the path STOP the machine even when far/small.
     priority_classes: ["person", "cat", "dog", "horse", "sheep", "cow"]
     priority_min_ratio: 0.015  # >=1.5% of frame (much smaller than 12%)
+  ground_obstacle:
+    # GENERIC obstacle detector — stops for ANY object in the alley, even ones
+    # YOLO cannot name (bags, crates, rocks, branches). Learns the grass/soil
+    # ground ahead and flags anything that doesn't match.
+    enabled: true
+    work_width: 320
+    roi_half_width: 0.30     # central corridor (the alley ahead)
+    eval_top: 0.60           # look for objects from here ...
+    eval_bottom: 0.90        # ... down to just above the machine
+    ref_top: 0.80            # learn "ground" from this near band
+    ref_bottom: 0.98
+    hist_bins: 24
+    min_ground_prob: 0.001   # colour rarer than this in ground = anomaly
+    dark_margin: 28.0        # also flag patches this much darker than ground
+    min_area_frac: 0.012     # blob this big (of corridor) = report it
+    stop_area_frac: 0.020    # blob this big = STOP
+    solidity_min: 0.45       # reject scattered grass speckle
+    confirm_frames: 2        # consecutive hits before stopping
 
 navigation:
   turn_cooldown_s: 10.0

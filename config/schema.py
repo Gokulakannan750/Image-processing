@@ -124,6 +124,30 @@ class OrchardConfig(BaseModel):
     rowend_frames: int = Field(6, ge=1)
 
 
+class GroundObstacleConfig(BaseModel):
+    """Generic 'anything in the path' obstacle detector (class-agnostic).
+
+    Learns the drivable ground (grass + soil) right in front of the machine and
+    flags any sizeable patch ahead that does not match it. Complements YOLO so
+    the machine stops for objects YOLO cannot recognise (bags, crates, rocks)."""
+
+    model_config = {"extra": "allow"}
+    enabled: bool = False
+    work_width: int = Field(320, ge=120, le=1920)
+    roi_half_width: float = Field(0.30, ge=0.05, le=0.5)
+    eval_top: float = Field(0.60, ge=0.0, le=1.0)
+    eval_bottom: float = Field(0.90, ge=0.0, le=1.0)
+    ref_top: float = Field(0.80, ge=0.0, le=1.0)
+    ref_bottom: float = Field(0.98, ge=0.0, le=1.0)
+    hist_bins: int = Field(24, ge=4, le=128)
+    min_ground_prob: float = Field(0.001, ge=0.0, le=1.0)
+    dark_margin: float = Field(28.0, ge=0.0, le=255.0)
+    min_area_frac: float = Field(0.012, ge=0.0, le=1.0)
+    stop_area_frac: float = Field(0.020, ge=0.0, le=1.0)
+    solidity_min: float = Field(0.45, ge=0.0, le=1.0)
+    confirm_frames: int = Field(2, ge=1, le=30)
+
+
 class DetectorsConfig(BaseModel):
     model_config = {"extra": "allow"}
     aruco: ArucoConfig = Field(default_factory=ArucoConfig)
@@ -133,6 +157,9 @@ class DetectorsConfig(BaseModel):
     orchard: OrchardConfig = Field(default_factory=OrchardConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     yolo: YoloConfig = Field(default_factory=YoloConfig)
+    ground_obstacle: GroundObstacleConfig = Field(
+        default_factory=GroundObstacleConfig
+    )
 
 
 class NavigationConfig(BaseModel):
