@@ -36,6 +36,16 @@ class FramePipeline:
             log.error(f"Invalid test mode: {mode_str}. Reverting to NORMAL.")
             self.test_mode = TestMode.NORMAL
 
+        # Detector stride: run the (heavy) detector stack on 1 of every N frames
+        # and re-use the last result on the others. This keeps the displayed
+        # video smooth even when detection is slow. 1 = run every frame.
+        self._stride = max(1, int(config_manager.get("processing.detector_stride", 1)))
+        self._frame_count = 0
+        self._last_result = DetectionResult()
+        # Cap processing resolution so per-frame cost is bounded no matter how
+        # large the camera/video frames are. 0 = use frames as-is.
+        self._max_width = int(config_manager.get("processing.max_width", 0))
+
     def process(self, frame: np.ndarray) -> Tuple[np.ndarray, DetectionResult]:
         self.perf_monitor.tick()
 
@@ -43,18 +53,33 @@ class FramePipeline:
             log.warning("Received empty frame in pipeline.")
             return frame, DetectionResult()
 
+        # 0. Cap resolution: downscale large frames so cost stays bounded.
+        if self._max_width and frame.shape[1] > self._max_width:
+            s = self._max_width / float(frame.shape[1])
+            frame = cv2.resize(frame, (self._max_width, int(frame.shape[0] * s)))
+
         # 1. Simulate environmental conditions (if enabled)
         processed_frame = EnvironmentSimulator.apply_mode(frame.copy(), self.test_mode)
 
-        # 2. Apply Lighting Normalization
-        processed_frame = self.normalizer.process(processed_frame)
+        # Detector stride: on skipped frames, show the fresh frame (smooth video)
+        # but re-use the previous detection result for navigation/safety.
+        self._frame_count += 1
+        run_detectors = (self._frame_count % self._stride) == 0 or self._stride == 1
 
-        # 3. Execute Detectors
-        if not self.registry.is_empty():
-            annotated_frame, result = self.registry.process_all(processed_frame)
-        else:
+        if not run_detectors:
             annotated_frame = processed_frame
-            result = DetectionResult()
+            result = self._last_result
+        else:
+            # 2. Apply Lighting Normalization
+            processed_frame = self.normalizer.process(processed_frame)
+
+            # 3. Execute Detectors
+            if not self.registry.is_empty():
+                annotated_frame, result = self.registry.process_all(processed_frame)
+            else:
+                annotated_frame = processed_frame
+                result = DetectionResult()
+            self._last_result = result
 
         # 4. Stability Analysis
         stability_score = self.stability_analyzer.update(result.targets)

@@ -19,6 +19,8 @@ class State(Enum):
     TURNING = auto()
     RECOVERING = auto()
     STOPPED = auto()
+    TRANSIT_TO_START = auto()
+    WAYPOINT_DRIVING = auto()
 
 
 class VehicleStateMachine:

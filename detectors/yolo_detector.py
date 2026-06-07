@@ -83,6 +83,12 @@ class YoloDetector(BaseDetector):
         self._priority_min_ratio = config_manager.get(
             "detectors.yolo.priority_min_ratio", 0.015
         )
+        # Performance: run inference at a reduced image size and cap the rate so
+        # the background thread does not saturate the CPU and starve the main
+        # video loop. 6 FPS obstacle updates are ample for a slow field robot.
+        self._imgsz = int(config_manager.get("detectors.yolo.imgsz", 416))
+        max_fps = float(config_manager.get("detectors.yolo.max_fps", 6.0))
+        self._min_interval = 1.0 / max_fps if max_fps > 0 else 0.0
         self._faulted = False  # True → inference disabled, return empty results
         self._consecutive_errors = 0
 
@@ -180,10 +186,15 @@ class YoloDetector(BaseDetector):
                 continue
 
             try:
+                t_inf = time.time()
                 obstacles = self._run_inference(frame)
                 with self._lock:
                     self._latest_obstacles = obstacles
                 self._consecutive_errors = 0  # reset on success
+                # Throttle: yield the CPU so the main video loop stays smooth.
+                spare = self._min_interval - (time.time() - t_inf)
+                if spare > 0:
+                    time.sleep(spare)
             except Exception as exc:
                 self._consecutive_errors += 1
                 log.error(
@@ -226,6 +237,7 @@ class YoloDetector(BaseDetector):
             classes=self._filter_classes,
             verbose=False,
             device=self._device,
+            imgsz=self._imgsz,
         )
 
         obstacles: List[ObstacleDetection] = []

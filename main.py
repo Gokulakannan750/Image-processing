@@ -274,7 +274,7 @@ def main() -> None:
                     },
                 )
 
-                if cv2.waitKey(30) & 0xFF == ord("q"):
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     log.info("Quit command received.")
                     break
 

@@ -11,6 +11,16 @@
 
 robot_id: "orchard-test"
 
+# Performance: keep the displayed video smooth.
+processing:
+  detector_stride: 3   # run the AI on every 3rd frame; video stays smooth
+  max_width: 512       # downscale big frames before processing (bounds cost)
+
+# Lighting normalization (CLAHE) is costly and not needed for the markerless
+# orchard/ground detectors, which adapt to lighting themselves. Off for speed.
+normalization:
+  enabled: false
+
 camera:
   index: 0
   loop_video: true
@@ -31,7 +41,7 @@ detectors:
     enabled: false
   orchard:
     enabled: true
-    work_width: 320
+    work_width: 256
     green_exg_min: 0.02
     tree_texture_pct: 52
     tree_texture_abs_min: 6.0
@@ -50,6 +60,8 @@ detectors:
     confidence: 0.40        # min confidence to report an obstacle
     danger_zone_ratio: 0.12 # obstacle bbox >= 12% of frame -> STOP
     device: "cpu"
+    imgsz: 416              # smaller inference image = much faster on CPU
+    max_fps: 6.0           # cap YOLO rate so it doesn't starve the video loop
     # Only obstacles in the PATH AHEAD (central corridor) trigger a STOP.
     # Roadside people/bikes are still detected (orange) but don't stop us.
     roi_enabled: true
@@ -64,9 +76,9 @@ detectors:
     # YOLO cannot name (bags, crates, rocks, branches). Learns the grass/soil
     # ground ahead and flags anything that doesn't match.
     enabled: true
-    work_width: 320
+    work_width: 256
     roi_half_width: 0.30     # central corridor (the alley ahead)
-    eval_top: 0.60           # look for objects from here ...
+    eval_top: 0.52           # look for objects from here (mid-distance) ...
     eval_bottom: 0.90        # ... down to just above the machine
     ref_top: 0.80            # learn "ground" from this near band
     ref_bottom: 0.98

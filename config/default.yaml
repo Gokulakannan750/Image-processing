@@ -86,6 +86,8 @@ detectors:
     confidence: 0.50           # minimum detection confidence
     danger_zone_ratio: 0.12    # bbox/frame area fraction that triggers E-STOP
     device: "cpu"              # "cpu", "cuda", or "mps"
+    imgsz: 416                 # inference image size (smaller = faster on CPU)
+    max_fps: 6.0               # cap inference rate so it doesn't starve the loop
     # Path-ahead STOP zone: only obstacles whose centre is in this central
     # corridor (and big enough) trigger a STOP. Roadside obstacles are still
     # detected but won't stop the machine. Set roi_enabled:false for whole-frame.
@@ -107,7 +109,7 @@ detectors:
     enabled: false
     work_width: 320
     roi_half_width: 0.30     # central corridor (the alley ahead)
-    eval_top: 0.60           # search band top (far)
+    eval_top: 0.52           # search band top (mid-distance)
     eval_bottom: 0.90        # search band bottom (near)
     ref_top: 0.80            # learn "ground" appearance from this near band
     ref_bottom: 0.98

@@ -89,23 +89,22 @@ class OrchardFollowerDetector(BaseDetector):
 
         Returns a list of (start, end, bounded) where 'bounded' is True if the
         gap has a tree wall on BOTH sides (i.e. doesn't touch either edge).
+
+        Vectorised with numpy (no per-pixel Python loop) for speed.
         """
         w = row.shape[0]
-        runs = []
-        start = None
-        for x in range(w):
-            if row[x] == 0 and start is None:
-                start = x
-            elif row[x] != 0 and start is not None:
-                runs.append((start, x - 1))
-                start = None
-        if start is not None:
-            runs.append((start, w - 1))
-        return [
-            (s, e, (s > 0 and e < w - 1))  # bounded = walls on both sides
-            for (s, e) in runs
-            if (e - s) >= 2  # ignore 1-2px slivers
-        ]
+        free = (row == 0).astype(np.int8)
+        if not free.any():
+            return []
+        # Transitions: +1 where a free-run starts, -1 just after it ends.
+        diff = np.diff(np.concatenate(([0], free, [0])))
+        starts = np.flatnonzero(diff == 1)
+        ends = np.flatnonzero(diff == -1) - 1  # inclusive end index
+        out = []
+        for s, e in zip(starts.tolist(), ends.tolist()):
+            if (e - s) >= 2:  # ignore 1-2px slivers
+                out.append((s, e, (s > 0 and e < w - 1)))
+        return out
 
     # ── main ──────────────────────────────────────────────────────────────--
     def process_frame(self, frame: np.ndarray) -> Tuple[np.ndarray, DetectionResult]:

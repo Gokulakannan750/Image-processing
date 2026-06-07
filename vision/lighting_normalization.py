@@ -21,18 +21,21 @@ class LightingNormalizer:
         self._clahe = cv2.createCLAHE(
             clipLimit=self.clip_limit, tileGridSize=self.grid_size
         )
+        # Precompute the gamma lookup table once (was rebuilt every frame).
+        self._gamma_table = None
+        if self.gamma != 1.0:
+            inv = 1.0 / self.gamma
+            self._gamma_table = np.array(
+                [((i / 255.0) ** inv) * 255 for i in range(256)]
+            ).astype("uint8")
 
     def process(self, frame: np.ndarray) -> np.ndarray:
         if not config_manager.get("normalization.enabled", True):
             return frame
 
-        # 1. Gamma Correction (optional)
-        if self.gamma != 1.0:
-            invGamma = 1.0 / self.gamma
-            table = np.array(
-                [((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]
-            ).astype("uint8")
-            frame = cv2.LUT(frame, table)
+        # 1. Gamma Correction (optional, table precomputed in __init__)
+        if self._gamma_table is not None:
+            frame = cv2.LUT(frame, self._gamma_table)
 
         # 2. Histogram Equalization
         if self.method == "CLAHE":

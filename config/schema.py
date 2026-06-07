@@ -60,6 +60,8 @@ class YoloConfig(BaseModel):
     confidence: float = Field(0.50, ge=0.0, le=1.0)
     danger_zone_ratio: float = Field(0.12, ge=0.0, le=1.0)
     device: str = "cpu"
+    imgsz: int = Field(416, ge=128, le=1920)   # inference size (smaller=faster)
+    max_fps: float = Field(6.0, ge=0.0, le=120.0)  # cap inference rate (frees CPU)
     # Path-ahead region of interest for the STOP decision.
     roi_enabled: bool = True
     roi_half_width: float = Field(0.28, ge=0.0, le=0.5)
@@ -272,12 +274,21 @@ class DebugConfig(BaseModel):
     history_maxlen: int = Field(30, ge=1)
 
 
+class ProcessingConfig(BaseModel):
+    """Pipeline performance controls (keep the video smooth)."""
+
+    model_config = {"extra": "allow"}
+    detector_stride: int = Field(1, ge=1, le=10)  # run detectors 1 of every N
+    max_width: int = Field(0, ge=0, le=7680)       # cap processing width (0=off)
+
+
 class AppConfig(BaseModel):
     """Root configuration schema."""
 
     model_config = {"extra": "allow"}
 
     robot_id: str = "robot-0"
+    processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     camera: CameraConfig = Field(default_factory=CameraConfig)
     detectors: DetectorsConfig = Field(default_factory=DetectorsConfig)
     navigation: NavigationConfig = Field(default_factory=NavigationConfig)
